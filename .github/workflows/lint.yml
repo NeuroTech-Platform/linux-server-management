@@ -13,6 +13,10 @@ jobs:
         with:
           egress-policy: audit
 
+      - name: Install requirements for linting
+        run: |
+          ansible-galaxy install -r testing/requirements.yml
+
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Lint Ansible Playbook
         uses: ansible/ansible-lint-action@eb92667e07cc18e1d115ff02e5f07126310cec11 # main

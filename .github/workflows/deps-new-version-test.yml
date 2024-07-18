@@ -6,7 +6,7 @@ on:
       - main 
 jobs:
   vagrant-test-new-deps-version:
-    if: startsWith(github.head_ref, 'renovate/') # Checks if the source branch starts with "renovate/"
+    if: startsWith(github.head_ref, 'renovate/') && !contains(github.event.pull_request.title, 'dependency ansible-lint') # Checks if the source branch starts with "renovate/"
     runs-on: ubuntu-22.04
     env:
       VAGRANT_DIR: ~/.vagrant.d/boxes
@@ -80,7 +80,7 @@ jobs:
   update-version-in-playbook:
     needs: vagrant-test-new-deps-version  # This job runs after vagrant-test-new-deps-version succeeds
     runs-on: ubuntu-latest
-    if: success() && contains(github.event.pull_request.title, 'konstruktoid.hardening')
+    if: success() && contains(github.event.pull_request.title, 'dependency konstruktoid.hardening')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
