@@ -6,5 +6,5 @@ exclude_paths:
   - .pre-commit-config.yaml
 warn_list:
   - var-naming[no-role-prefix]
-skip_list:
-  - syntax-check[specific]
+exclude_paths:
+  - testing/test-new-version-hardening.yml
