@@ -4,5 +4,6 @@ exclude_paths:
   - .git/
   - .github/
   - .pre-commit-config.yaml
+  - konstruktoid.hardening
 warn_list:
   - var-naming[no-role-prefix]
