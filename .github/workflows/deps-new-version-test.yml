@@ -27,17 +27,6 @@ jobs:
           vagrant plugin install vagrant-vbguest
           vagrant plugin install vagrant-disksize
 
-      - name: Cache apt packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            /var/cache/apt/archives
-            /var/lib/apt/lists
-          key: ${{ runner.os }}-apt-${{ hashFiles('**/Dockerfile') }}
-          restore-keys: |
-            ${{ runner.os }}-apt-
-        # Caches the downloaded apt packages to save time and bandwidth on subsequent runs
-
       - name: Install requirements for Python and Ansible
         run: |
           pip install -r requirements.txt
