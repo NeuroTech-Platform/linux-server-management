@@ -22,4 +22,4 @@ jobs:
       - name: Lint Ansible Playbook
         uses: ansible/ansible-lint-action@eb92667e07cc18e1d115ff02e5f07126310cec11 # main
         with:
-        config: ./.ansible-lint
+          config: ./.ansible-lint
