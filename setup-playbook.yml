@@ -39,6 +39,7 @@
       ansible.builtin.include_role:
         name: konstruktoid.hardening
       vars:
+        automatic_updates: true # makes this visible and clear
         auditd_action_mail_acct: "{{ AUDITD_ACTION_MAIL_ACCT }}"
         manage_ufw: "{{ MANAGE_UFW }}"
         ufw_outgoing_traffic: "{{ UFW_OUTGOING_TRAFFIC }}"
@@ -51,4 +52,3 @@
         sshd_max_auth_tries: "{{ SSHD_MAX_AUTH_TRIES }}"
         suid_sgid_permissions: "{{ SUID_SGID_PERMISSIONS }}"
         sshd_allow_tcp_forwarding: "{{ SSHD_ALLOW_TCP_FORWARDING | default(false) }}"
-        # suid_sgid_blocklist: #might need edit
