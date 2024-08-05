@@ -1,0 +1,18 @@
+on: [push, pull_request]
+name: Ansible Lint
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@0d381219ddf674d61a7572ddd19d7941e271515c # v2.9.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Lint Ansible Playbook
+        uses: ansible/ansible-lint-action@eb92667e07cc18e1d115ff02e5f07126310cec11 # main

@@ -31,7 +31,7 @@
       ansible.builtin.git:
         repo: https://github.com/konstruktoid/ansible-role-hardening.git
         dest: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.hardening"
-        version: 'v2.1.0'
+        version: 'v2.1.1'
       delegate_to: localhost
       run_once: true
 
@@ -39,7 +39,8 @@
       ansible.builtin.include_role:
         name: konstruktoid.hardening
       vars:
-        automatic_updates: true # makes this visible and clear
+        # noqa: var-naming[no-role-prefix]
+        automatic_updates: true
         auditd_action_mail_acct: "{{ AUDITD_ACTION_MAIL_ACCT }}"
         manage_ufw: "{{ MANAGE_UFW }}"
         ufw_outgoing_traffic: "{{ UFW_OUTGOING_TRAFFIC }}"
