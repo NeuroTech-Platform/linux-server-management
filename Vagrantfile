@@ -24,7 +24,7 @@ Vagrant.configure("2") do |config|
     bookworm_vlan.vm.provision "shell",
       inline: "ip link set dev eth0 down; ip link set eth0 name eth0.101; ip link set dev eth0.101 up; dhclient -r eth0.101; dhclient eth0.101"
     bookworm_vlan.vm.provision "shell",
-      inline: "apt-get update && apt-get -y install python3-pip curl && python3 -m pip install ansible"
+      inline: "apt-get update && apt-get remove -y dkms && apt-get -y install dkms && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade && apt-get -y install python3-pip curl && rm -rf /usr/lib/python3.11/EXTERNALLY-MANAGED && python3 -m pip install ansible" 
     bookworm_vlan.vm.provision "ansible" do |a|
       a.verbose = "v"
       a.limit = "all"
