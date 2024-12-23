@@ -1,4 +1,14 @@
 Vagrant.configure("2") do |config|
+  #### patch until fix https://github.com/hashicorp/vagrant/issues/13404#issuecomment-2490437792
+  config.vagrant.plugins = {
+    'vagrant-vbguest' => {
+      'sources' =>[
+        'vagrant-vbguest-0.32.1.gem',
+        'https://rubygems.org/', # needed but not used
+      ],
+    }
+  }
+  #######
   config.vbguest.installer_options = { allow_kernel_upgrade: true }
   config.vm.provider "virtualbox" do |vb|
     vb.customize ["modifyvm", :id, "--uart1", "0x3F8", "4"]
