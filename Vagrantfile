@@ -15,17 +15,17 @@ Vagrant.configure("2") do |config|
     vb.customize ["modifyvm", :id, "--uartmode1", "disconnected"]
   end
 
-  config.vm.define "bullseye_vlan" do |bullseye_vlan|
-    bullseye_vlan.vm.box = "debian/bullseye64"
-    bullseye_vlan.ssh.insert_key = true
-    bullseye_vlan.vm.hostname = "bullseye-vlan"
-    bullseye_vlan.vm.boot_timeout = 600
-    bullseye_vlan.vbguest.auto_update = false
-    bullseye_vlan.vm.provision "shell",
+  config.vm.define "bookworm_vlan" do |bookworm_vlan|
+    bookworm_vlan.vm.box = "debian/bookworm64"
+    bookworm_vlan.ssh.insert_key = true
+    bookworm_vlan.vm.hostname = "bookworm-vlan"
+    bookworm_vlan.vm.boot_timeout = 600
+    bookworm_vlan.vbguest.auto_update = false
+    bookworm_vlan.vm.provision "shell",
       inline: "ip link set dev eth0 down; ip link set eth0 name eth0.101; ip link set dev eth0.101 up; dhclient -r eth0.101; dhclient eth0.101"
-    bullseye_vlan.vm.provision "shell",
+    bookworm_vlan.vm.provision "shell",
       inline: "apt-get update && apt-get -y install python3-pip curl && python3 -m pip install ansible"
-    bullseye_vlan.vm.provision "ansible" do |a|
+    bookworm_vlan.vm.provision "ansible" do |a|
       a.verbose = "v"
       a.limit = "all"
       a.playbook = "testing/being_tested.yml"
