@@ -42,4 +42,3 @@
         docker_unattended_upgrades: "{{ DOCKER_UNATTENDED_UPGRADES | default(true) }}"
         docker_user_bashrc: "{{ DOCKER_USER_BASHRC | default(true) }}"
         docker_user: "{{ DOCKER_USER | default('dockeruser') }}"
-
