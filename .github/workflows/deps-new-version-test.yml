@@ -31,9 +31,35 @@ jobs:
           #####
           vagrant plugin install vagrant-disksize
 
-      - name: Install requirements for Python and Ansible
+      - name: Install requirements for Python and Ansible #p1
         run: |
           pip install -r requirements.txt
+
+      - name: Install collections the role points to, then silence bad meta/requirements.yml #temp tape
+        shell: bash
+        run: |
+          ROLE_DIR="$HOME/.ansible/roles/konstruktoid.hardening"
+          META_REQ="$ROLE_DIR/meta/requirements.yml"
+          ROOT_REQ="$ROLE_DIR/requirements.yml"
+
+          # If meta/requirements.yml is a symlink or contains '../requirements.yml',
+          # install collections from the real file (if present)
+          if [ -e "$META_REQ" ]; then
+            if [ -L "$META_REQ" ] || grep -qx '\.\./requirements\.yml' "$META_REQ" 2>/dev/null; then
+              if [ -f "$ROOT_REQ" ]; then
+                mkdir -p "$GITHUB_WORKSPACE/collections"
+                ansible-galaxy collection install -r "$ROOT_REQ" -p "$GITHUB_WORKSPACE/collections"
+              fi
+            fi
+            # Neutralize the file so Ansible stops erroring on schema
+            printf -- '---\n[]\n' > "$META_REQ"
+          fi
+        env:
+          ANSIBLE_COLLECTIONS_PATHS: "${{ github.workspace }}/collections:${HOME}/.ansible/collections"
+
+
+      - name: Install requirements for Python and Ansible #p2
+        run: |
           ansible-galaxy install -r requirements.yml
           ansible-galaxy install -r testing/requirements.yml
 
