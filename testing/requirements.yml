@@ -4,10 +4,3 @@ roles:
     version: 'v4.0.1'
     src: https://github.com/konstruktoid/ansible-role-hardening.git
     scm: git
-collections:
-  - name: ansible.posix
-    version: "2.1.0"
-  - name: community.crypto
-    version: "3.0.3"
-  - name: community.general
-    version: "11.1.2"
