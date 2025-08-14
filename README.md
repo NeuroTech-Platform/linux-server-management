@@ -76,9 +76,39 @@ Manages user accounts with the following features:
 - Allows limited sudo commands for non-admin users
 - Forces password change on first login
 
-**Required Variables**: #TODO: Add all the others needed
-- `users_add_userlist`: List of users to create
+**Required Variables**:
+- `SSH_USERLIST`: List of users to create (used by users_add role)
 - `GENERALINITIALPASSWORD`: Default initial password (use Ansible Vault)
+- `AUDITD_ACTION_MAIL_ACCT`: Email address for audit system alerts
+- `MANAGE_UFW`: Enable/disable UFW firewall management (true/false)  
+- `UFW_OUTGOING_TRAFFIC`: List of allowed outbound traffic rules
+- `REBOOT_UBUNTU`: Allow automatic reboots for updates (true/false)
+- `SSHD_ADMIN_NET`: List of networks allowed for SSH admin access
+
+**Example Configuration**:
+```yaml
+# group_vars/your-environment/vars.yml
+SSH_USERLIST:
+  - username: "admin_user"
+    admin: true
+    public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI..."
+
+AUDITD_ACTION_MAIL_ACCT: "security@example.com"
+MANAGE_UFW: true
+UFW_OUTGOING_TRAFFIC:
+  - "80/tcp"    # HTTP
+  - "443/tcp"   # HTTPS
+  - "53"        # DNS
+REBOOT_UBUNTU: false
+SSHD_ADMIN_NET:
+  - "192.168.1.0/24"
+  - "10.0.0.0/8"
+
+# Optional security overrides (defaults shown)
+# SSHD_MAX_AUTH_TRIES: 3        # CIS compliant (default)
+# SSHD_LOGIN_GRACE_TIME: 60     # Extended for password complexity
+# SESSION_TIMEOUT: 900          # 15 min for operational efficiency
+```
 
 ## Quick Start
 
@@ -87,7 +117,8 @@ Create or modify inventory files in the `inventories/` directory based on your e
 
 ### 2. Configure variables
 Edit the appropriate files in `group_vars/` and `host_vars/` for your environment-specific settings.
-TODO: add example file to guide newbies
+See the example configurations in `docs/inventory.md` for detailed guidance on setting up your environment.
+
 ### 3. Run a playbook
 ```bash
 # Set your SSH username

@@ -1,10 +1,13 @@
+# This must be edited if you plan to publish your inventories in your private repo
 !inventories/
-inventories/*
+inventories/*/*
+inventories/*.yml
 !group_vars/
 group_vars/*/*
 group_vars/*.yml
 !host_vars/
-host_vars/*
+host_vars/*/*
+host_vars/*.yml
 
 # Ignore my TODO text file
 TODO
