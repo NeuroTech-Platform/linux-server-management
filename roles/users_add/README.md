@@ -2,6 +2,31 @@
 
 An Ansible role for automated user account management with SSH key configuration and flexible sudo permissions.
 
+## Integration with Security Hardening
+
+This role is designed to work seamlessly with security hardening roles like [konstruktoid.hardening](https://github.com/konstruktoid/ansible-role-hardening). The recommended workflow is:
+
+1. **First**: Use `users_add` to create user accounts with SSH keys and sudo permissions
+2. **Second**: Apply `konstruktoid.hardening` to implement CIS-based security hardening
+
+```yaml
+# Recommended integration pattern
+- name: Create user accounts
+  include_role:
+    name: users_add
+  vars:
+    users_add_userlist: "{{ SSH_USERLIST }}"
+
+- name: Apply security hardening
+  include_role:
+    name: konstruktoid.hardening
+  vars:
+    manage_users: true  # Enables SSH security policies for created users
+    sshd_allow_users: "{{ SSH_USERLIST | map(attribute='username') | list }}"
+```
+
+This separation follows the single responsibility principle: `users_add` handles user lifecycle management while hardening roles handle security policies.
+
 ## Description
 
 This role creates and manages user accounts on Linux systems with the following features:
