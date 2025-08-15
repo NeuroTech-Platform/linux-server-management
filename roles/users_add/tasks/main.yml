@@ -16,6 +16,7 @@
     update_password: on_create  # This ensures the password is only set when the user is created
   loop: "{{ users_add_userlist | default([]) }}"
   notify: Force password change on first login
+  no_log: true  # Prevent password hashes from being logged
 
 - name: Add additional public keys
   ansible.posix.authorized_key:
