@@ -12,6 +12,16 @@ host_vars/*.yml
 # Ignore my TODO text file
 TODO
 
+# Ignore AI agent prompting facilities
+.kleocursor/
+memorybank/
+memory-bank/
+.cursor/
+.aider*
+.copilot/
+.ai-prompts/
+.context/
+
 # Ignore the tested playbook copy
 testing/being_tested.yml
 
