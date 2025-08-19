@@ -92,7 +92,7 @@ ssh_args = -o ControlMaster=auto -o ControlPersist=60s -o StrictHostKeyChecking=
 timeout = 30
 
 [ssh_connection]
-ssh_args = -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/dev/null -o PasswordAuthentication=no
+ssh_args = -o StrictHostKeyChecking=yes -o PasswordAuthentication=no
 control_path_dir = ~/.ansible/cp
 ```
 

@@ -52,8 +52,8 @@
           - MANAGE_UFW | type_debug == "bool"
           - UFW_OUTGOING_TRAFFIC is defined
           - UFW_OUTGOING_TRAFFIC | length > 0
-          - REBOOT_UBUNTU is defined
-          - REBOOT_UBUNTU | type_debug == "bool"
+          - AUTO_UPDATES_OPTIONS.reboot is defined
+          - AUTO_UPDATES_OPTIONS.reboot | type_debug == "bool"
           - SSHD_ADMIN_NET is defined
           - SSHD_ADMIN_NET | length > 0
         fail_msg: |
@@ -62,7 +62,7 @@
           - AUDITD_ACTION_MAIL_ACCT: Email address for audit alerts
           - MANAGE_UFW: Enable/disable UFW firewall management (true/false)
           - UFW_OUTGOING_TRAFFIC: List of allowed outbound traffic rules
-          - REBOOT_UBUNTU: Allow automatic reboots for updates (true/false)
+          - AUTO_UPDATES_OPTIONS.reboot: Allow automatic reboots for updates (true/false)
           - SSHD_ADMIN_NET: List of networks allowed for SSH admin access
         success_msg: "All required variables validation passed"
       tags: [validation, always]
@@ -91,6 +91,10 @@
         users_add_userlist: "{{ SSH_USERLIST }}"
       when: MANAGE_USERS is not defined or MANAGE_USERS | bool
       tags: [users, user-management]
+
+    - name: Execute pending handlers after user creation
+      ansible.builtin.meta: flush_handlers
+      tags: [users, user-management, handlers]
 
     # ===================================================================
     # HARDENING ROLE PREPARATION SECTION
@@ -164,7 +168,7 @@
         sshd_login_grace_time: "{{ SSHD_LOGIN_GRACE_TIME | default(60)}}"                        # SSH login grace period
         sshd_max_auth_tries: "{{ SSHD_MAX_AUTH_TRIES | default(3) }}"                            # Maximum SSH auth attempts
         sshd_allow_tcp_forwarding: "{{ SSHD_ALLOW_TCP_FORWARDING | default(false) }}"  # Allow SSH port forwarding
-        sshd_client_alive_interval: "{{ SSHD_TIMEOUT_SECS | default(300) }}"        # SSH client timeout (10 min default)
+        sshd_client_alive_interval: "{{ SSHD_TIMEOUT_SECS | default(300) }}"        # SSH client timeout (5 min default)
         
         # === SYSTEM SECURITY ===
         disable_apport: true                                      # Disable Ubuntu crash reporting
@@ -196,7 +200,11 @@
         packages_blocklist: "{{
           lookup('ansible.builtin.file', lookup('env', 'HOME') + '/.ansible/roles/konstruktoid.hardening/defaults/main.yml')
           | from_yaml
-          | json_query('packages_blocklist // `[]`')
+          | combine({'packages_blocklist': []})
+          | dict2items
+          | selectattr('key', 'eq', 'packages_blocklist')
+          | map(attribute='value')
+          | first
           | difference((MANDATORY_PACKAGES | default([])))
           }}"
       tags: [hardening, security, cis-hardening]

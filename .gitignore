@@ -8,6 +8,7 @@ group_vars/*.yml
 !host_vars/
 host_vars/*/*
 host_vars/*.yml
+logs/
 
 # Ignore my TODO text file
 TODO
