@@ -147,6 +147,7 @@
           reboot: "{{ AUTO_UPDATES_OPTIONS.reboot | default(true) }}"
           reboot_from_time: "{{ AUTO_UPDATES_OPTIONS.reboot_from_time | default('2:00') }}"
           reboot_time_margin_mins: "{{ AUTO_UPDATES_OPTIONS.reboot_time_margin_mins | default(20) }}"
+          custom_origins:  "{{ AUTO_UPDATES_OPTIONS.custom_origins | default('') }}"
         
         # === LOGIN AND SESSION MANAGEMENT ===
         logind: "{{ LOGIND_HARDENING }}"                # Configure systemd-logind settings
@@ -198,13 +199,8 @@
         # === PACKAGE MANAGEMENT ===
         # Dynamically generate packages blocklist excluding mandatory packages
         packages_blocklist: "{{
-          lookup('ansible.builtin.file', lookup('env', 'HOME') + '/.ansible/roles/konstruktoid.hardening/defaults/main.yml')
-          | from_yaml
-          | combine({'packages_blocklist': []})
-          | dict2items
-          | selectattr('key', 'eq', 'packages_blocklist')
-          | map(attribute='value')
-          | first
+          (lookup('ansible.builtin.file', lookup('env', 'HOME') + '/.ansible/roles/konstruktoid.hardening/defaults/main.yml')
+          | from_yaml)['packages_blocklist']
           | difference((MANDATORY_PACKAGES | default([])))
           }}"
       tags: [hardening, security, cis-hardening]
@@ -219,9 +215,18 @@
         {{ POST_RUN_EXTRA_COMMANDS }}
       args:
         executable: /bin/bash
+      become: true
       when: POST_RUN_EXTRA_COMMANDS is defined and POST_RUN_EXTRA_COMMANDS | trim != ""
       changed_when: false  # Prevent task from always reporting "changed"
       tags: [post-config, custom-commands]
+
+    - name: Create PAM MOTD configuration for Debian (erased by hardening manage_pam config template)
+      ansible.builtin.lineinfile:
+        path: /etc/pam.d/sshd
+        line: "session optional pam_motd.so motd=/var/cache/motd-security-status"
+        insertafter: "# Print the message of the day upon successful login"
+        state: present
+      when: ansible_distribution == "Debian"
 
   # Post-execution validation and reporting
   post_tasks:
@@ -241,6 +246,7 @@
       when: MANAGE_UFW | default(false)
       changed_when: false
       failed_when: false
+      become: true
       tags: [validation, post-check]
 
     - name: Display setup completion summary
@@ -248,7 +254,7 @@
         msg:
           - "===== SETUP COMPLETION SUMMARY ====="
           - "Host: {{ inventory_hostname }}"
-          - "Users created: {{ SSH_USERLIST | length }}"
+          - "Users validated via this playbook: {{ SSH_USERLIST | length }}"
           - "Hardening applied: {{ 'Yes' if (MANAGE_UFW | default(false)) else 'Partial' }}"
           - "SSH service status: {{ 'Running' if ssh_status.status.ActiveState == 'active' else 'Check required' }}"
           - "UFW status: {{ ufw_status.stdout.split('\n')[0] if (MANAGE_UFW | default(false) and ufw_status is defined) else 'Not managed' }}"
