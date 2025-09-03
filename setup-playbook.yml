@@ -175,6 +175,7 @@
         disable_apport: true                                      # Disable Ubuntu crash reporting
         disable_root_account: "{{ DISABLE_ROOT_ACCOUNT | default(true) }}"  # Disable root login
         manage_users: "{{ MANAGE_USERS }}"                       # Enable user account management
+        manage_packages: true                                     # Enable package management (removal/installation)
         
         # === SYSTEM COMPONENT MANAGEMENT ===
         # Each option controls whether the hardening role manages specific system components
@@ -206,6 +207,20 @@
       tags: [hardening, security, cis-hardening]
 
     # ===================================================================
+    # TEMPRORARY DEBUG PART
+    # Will be removed once https://github.com/konstruktoid/ansible-role-hardening/pull/979 is resolved and release is made
+    # ===================================================================
+
+    - name: Restart unattended-upgrades to apply configuration changes
+      ansible.builtin.systemd_service:
+        name: unattended-upgrades
+        state: restarted
+        enabled: true
+      when:
+        - ansible_facts.virtualization_type not in ["container", "docker", "podman"]
+      become: true
+
+    # ===================================================================
     # POST-CONFIGURATION SECTION
     # Run any additional custom commands if specified
     # ===================================================================
@@ -226,6 +241,7 @@
         line: "session optional pam_motd.so motd=/var/cache/motd-security-status"
         insertafter: "# Print the message of the day upon successful login"
         state: present
+      become: true
       when: ansible_distribution == "Debian"
 
   # Post-execution validation and reporting
@@ -259,7 +275,7 @@
           - "SSH service status: {{ 'Running' if ssh_status.status.ActiveState == 'active' else 'Check required' }}"
           - "UFW status: {{ ufw_status.stdout.split('\n')[0] if (MANAGE_UFW | default(false) and ufw_status is defined) else 'Not managed' }}"
           - "====================================="
-      tags: [info, summary, always]
+      tags: [info, summary]
 
     - name: Reminder about next steps
       ansible.builtin.debug:
@@ -270,4 +286,4 @@
           - "3. Review firewall rules if UFW was configured"
           - "4. Check system logs for any errors: journalctl -xe"
           - "5. Consider rebooting to ensure all changes take effect"
-      tags: [info, reminder, always]
+      tags: [info, reminder]
