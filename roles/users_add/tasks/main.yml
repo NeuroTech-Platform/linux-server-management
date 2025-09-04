@@ -43,7 +43,6 @@
     block: |
       # ===================================================================
       # Limited sudo access for user: {{ item.username }}.
-      # Abuse attempts are logged.
       # ===================================================================
       # 
       # This user is granted limited sudo privileges for system maintenance.
@@ -53,12 +52,44 @@
       # To see this help again, run: sudo cat /etc/sudoers.d/{{ item.username }}
       # ===================================================================
       
+      # Show lecture message on sudo use
+      Defaults:{{ item.username }} lecture = always
+      Defaults:{{ item.username }} lecture_file = /etc/sudoers.d/.{{ item.username }}_lecture
+      
       # Actual sudo rules:
       {{ item.username }} ALL=(ALL) {{ item.non_admin_allowed_commands }}
     state: present
     create: true
     mode: '0440'
     validate: '/usr/sbin/visudo -cf %s'
+  loop: "{{ users_add_userlist | default([]) }}"
+  when:
+    - not item.admin
+    - item.non_admin_allowed_commands is defined
+    - item.non_admin_allowed_commands | length > 0
+
+- name: Create sudo lecture file for non-admin users
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/.{{ item.username }}_lecture"
+    content: |
+      
+      ===============================================================================
+      NOTICE: Limited sudo access for {{ item.username }}. Abuse attempts are logged.
+      ===============================================================================
+      
+      You have restricted sudo privileges. Your allowed commands are:
+      {{ item.non_admin_allowed_commands }}
+      
+      Example usage:
+        sudo apt update
+        sudo apt upgrade
+        sudo reboot
+      
+      ===============================================================================
+      
+    mode: '0644'
+    owner: root
+    group: root
   loop: "{{ users_add_userlist | default([]) }}"
   when:
     - not item.admin
