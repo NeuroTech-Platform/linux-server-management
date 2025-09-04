@@ -41,7 +41,19 @@
   ansible.builtin.blockinfile:
     path: "/etc/sudoers.d/{{ item.username }}"
     block: |
-      # User {{ item.username }} can run system updates without a password
+      # ===================================================================
+      # Limited sudo access for user: {{ item.username }}.
+      # Abuse attempts are logged.
+      # ===================================================================
+      # 
+      # This user is granted limited sudo privileges for system maintenance.
+      # 
+      # ALLOWED COMMANDS: {{ item.non_admin_allowed_commands }}
+      #
+      # To see this help again, run: sudo cat /etc/sudoers.d/{{ item.username }}
+      # ===================================================================
+      
+      # Actual sudo rules:
       {{ item.username }} ALL=(ALL) {{ item.non_admin_allowed_commands }}
     state: present
     create: true
@@ -187,8 +199,18 @@
           write_output "${GREEN}✅ No reboot required${NC}\n"
       fi
       
-      # Check last reboot time
-      LAST_BOOT=$(who -b 2>/dev/null | awk '{print $3, $4}' || uptime -s 2>/dev/null || echo "unknown")
+      # Check last reboot time with multiple fallback methods
+      LAST_BOOT=""
+      
+      if [ -z "$LAST_BOOT" ] && command -v uptime >/dev/null 2>&1; then
+          LAST_BOOT=$(uptime -s 2>/dev/null)
+      fi
+      
+      # Fallback
+      if [ -z "$LAST_BOOT" ]; then
+          LAST_BOOT="unknown"
+      fi
+      
       write_output "ℹ️  Last boot: $LAST_BOOT\n"
       
       # Check system uptime
