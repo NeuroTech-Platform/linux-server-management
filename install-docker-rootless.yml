@@ -59,6 +59,14 @@
       failed_when: namespace_check.rc != 0
       tags: [validation, always]
 
+    - name: Install pasta (passt) package for docker rootless networking
+      ansible.builtin.apt:
+        name: passt
+        state: present
+        update_cache: true
+      become: true
+      tags: [docker-setup, packages]
+
 
   tasks:
     # ===================================================================
@@ -87,7 +95,7 @@
       ansible.builtin.git:
         repo: https://github.com/konstruktoid/ansible-role-docker-rootless.git
         dest: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.docker_rootless"
-        version: 'v1.2.1'  # Pinned version for reproducibility
+        version: 'v1.6.0'  # Pinned version for reproducibility
       delegate_to: localhost
       run_once: true
       tags: [docker-setup, role-download]
@@ -116,10 +124,14 @@
         docker_rootful: "{{ DOCKER_ROOTFUL | default(false) }}"                  # Install rootful Docker alongside rootless
         docker_rootful_opts: "{{ DOCKER_ROOTFUL_OPTS | default(false) }}"        # Additional rootful Docker options
         
-        # docker_driver_network: "{{ DOCKER_DRIVER_NETWORK | default('vpnkit') }}"
+        # === NETWORK DRIVER CONFIGURATION ===
+        # pasta: Modern, better AppArmor compatibility, works with hidepid=2
+        docker_driver_network: "{{ DOCKER_NETWORK_DRIVER | default('pasta') }}"
+        # implicit port driver required for pasta
+        docker_driver_port: "implicit"
 
         # === SERVICE MANAGEMENT ===
-        docker_service_restart: false  # avoid systemd --user inside role; we handle start in post-tasks
+        docker_service_restart: true  # Let the role handle service restart properly
         docker_unattended_upgrades: "{{ DOCKER_UNATTENDED_UPGRADES | default(true) }}"  # Enable automatic Docker updates
         
         # === USER CONFIGURATION ===
@@ -130,6 +142,138 @@
 
   # Post-installation validation and information
   post_tasks:
+
+    # NOTE: Network driver configuration is now handled by the role using:
+    #   docker_driver_network: pasta
+    #   docker_driver_port: implicit
+    # No wrapper script needed!
+
+
+    # AppArmor configuration for unprivileged_userns (REQUIRED for rootless Docker)
+    # We keep the profile in ENFORCE mode but add minimal required capabilities
+    
+    - name: Check if unprivileged_userns AppArmor profile exists
+      ansible.builtin.stat:
+        path: /etc/apparmor.d/unprivileged_userns
+      become: true
+      register: unprivileged_userns_apparmor_profile
+      tags: [docker-config, apparmor]
+
+    - name: Backup original unprivileged_userns profile
+      ansible.builtin.copy:
+        src: /etc/apparmor.d/unprivileged_userns
+        dest: /etc/apparmor.d/unprivileged_userns.backup
+        remote_src: true
+        force: false  # Don't overwrite existing backup
+      become: true
+      when: unprivileged_userns_apparmor_profile.stat.exists
+      tags: [docker-config, apparmor]
+
+    - name: Comment out capability deny in unprivileged_userns profile
+      ansible.builtin.lineinfile:
+        path: /etc/apparmor.d/unprivileged_userns
+        regexp: '^(\s+)audit deny capability,$'
+        line: '\1# audit deny capability,  # Commented for Docker rootless - capabilities controlled via local overrides'
+        backrefs: true
+      become: true
+      when: unprivileged_userns_apparmor_profile.stat.exists
+      register: unprivileged_userns_profile_patched
+      tags: [docker-config, apparmor]
+
+    - name: Ensure AppArmor local directory exists
+      ansible.builtin.file:
+        path: /etc/apparmor.d/local
+        state: directory
+        mode: '0755'
+      become: true
+      when: unprivileged_userns_apparmor_profile.stat.exists
+      tags: [docker-config, apparmor]
+
+    - name: Create minimal AppArmor local overrides for unprivileged_userns
+      ansible.builtin.copy:
+        dest: /etc/apparmor.d/local/unprivileged_userns
+        mode: '0644'
+        content: |
+          # Minimal Docker rootless compatibility
+          capability setuid,
+          capability setgid,
+          
+          # Allow user namespace mapping files (owner-restricted)
+          owner @{PROC}/@{pid}/uid_map w,
+          owner @{PROC}/@{pid}/gid_map w,
+          owner @{PROC}/@{pid}/setgroups w,
+      become: true
+      when: unprivileged_userns_apparmor_profile.stat.exists
+      register: unprivileged_userns_local_overrides
+      tags: [docker-config, apparmor]
+
+    - name: Reload unprivileged_userns AppArmor profile
+      ansible.builtin.command:
+        cmd: apparmor_parser -r /etc/apparmor.d/unprivileged_userns
+      become: true
+      when:
+        - unprivileged_userns_apparmor_profile.stat.exists
+        - unprivileged_userns_profile_patched.changed or unprivileged_userns_local_overrides.changed
+      tags: [docker-config, apparmor]
+
+    - name: Configure Docker to use cgroupfs driver (bypasses systemd/polkit issues)
+      ansible.builtin.copy:
+        dest: "/home/{{ DOCKER_USER | default('dockeruser') }}/.config/docker/daemon.json"
+        mode: '0644'
+        content: |
+          {
+            "exec-opts": ["native.cgroupdriver=cgroupfs"]
+          }
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      register: docker_daemon_config
+      tags: [docker-config]
+
+    - name: Restart docker service if daemon.json or AppArmor changed
+      ansible.builtin.shell: |
+        export XDG_RUNTIME_DIR=/run/user/$(id -u)
+        systemctl --user daemon-reload
+        systemctl --user restart docker
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      when:
+        - docker_daemon_config.changed
+          or (unprivileged_userns_profile_patched is defined and unprivileged_userns_profile_patched.changed)
+          or (unprivileged_userns_local_overrides is defined and unprivileged_userns_local_overrides.changed)
+      register: docker_restart_result
+      retries: 3  # Retry up to 3 times for timing issues
+      delay: 2    # Wait 2 seconds between retries
+      until: docker_restart_result.rc == 0
+      tags: [docker-config, always]
+
+    - name: Check Docker version for rootless user
+      ansible.builtin.shell: "export PATH=$PATH:$HOME/.local/bin && export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock && docker --version"
+      register: docker_version_check
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      changed_when: false
+      failed_when: false
+      tags: [info, summary, always]
+
+    - name: Check Docker service status for rootless user
+      ansible.builtin.shell: "export XDG_RUNTIME_DIR=/run/user/$(id -u) && systemctl --user status docker"
+      register: docker_service_check
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      changed_when: false
+      failed_when: false
+      tags: [info, summary, always]
+
+    - name: Display raw Docker service status for debugging
+      ansible.builtin.debug:
+        msg: "Raw Docker service status:\n{{ docker_service_check.stdout }}\n{{ docker_service_check.stderr }}"
+      tags: [debug, always]
 
     - name: Display Docker installation summary
       ansible.builtin.debug:
@@ -144,15 +288,23 @@
           - "=================================================="
       tags: [info, summary, always]
 
+    - name: Get Docker user info for usage instructions
+      become: true
+      ansible.builtin.user:
+        name: "{{ DOCKER_USER | default('dockeruser') }}"
+      check_mode: true
+      register: docker_user_info_final
+      tags: [info, instructions, always]
+
     - name: Display Docker usage instructions
       ansible.builtin.debug:
         msg:
           - "DOCKER USAGE INSTRUCTIONS:"
           - "1. Switch to Docker user: sudo -u {{ DOCKER_USER | default('dockeruser') }} -i"
-          - "2. Start Docker daemon: systemctl --user start docker"
+          - "2. Check Docker daemon: systemctl --user status docker"
           - "3. Test Docker: docker run hello-world"
           - "4. For automatic startup: loginctl enable-linger {{ DOCKER_USER | default('dockeruser') }}"
-          - "5. Docker socket: /run/user/{{ docker_user_uid }}/docker.sock"
+          - "5. Docker socket: /run/user/{{ docker_user_info_final.uid }}/docker.sock"
           - "6. Docker data: ~/.local/share/docker/"
           - ""
           - "SECURITY NOTES:"
@@ -160,4 +312,12 @@
           - "- Containers cannot access host root filesystem"
           - "- Limited to user's file permissions and capabilities"
           - "- Network namespace isolation provides additional security"
+          - ""
+          - "TROUBLESHOOTING:"
+          - "If Docker fails to start, check:"
+          - "- AppArmor denials: sudo journalctl | grep -i apparmor | grep slirp4netns"
+          - "- Docker logs: journalctl --user -u docker -n 100"
+          - "- Docker rootless log: cat ~/docker-rootless.log"
+          - "- Test slirp4netns: /usr/bin/slirp4netns --help"
+          - "- To debug AppArmor, set DOCKER_APPARMOR_COMPLAIN_MODE=true and re-run"
       tags: [info, instructions, always]
