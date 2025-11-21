@@ -1,0 +1,29 @@
+---
+SSH_USERLIST:
+  - username: user1
+    admin: true
+    public_key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAWJD3NJOPnhGRnvCyILZ4GQ2cMyl96StalB5Fo2FgVY0Ei
+      fakeKeyToTestTheRole
+AUDITD_ACTION_MAIL_ACCT: root
+MANAGE_UFW: true
+UFW_OUTGOING_TRAFFIC: [22, 53, 80, 123, 443, 853, 465]
+DISABLE_WIRELESS: true
+REBOOT_UBUNTU: true
+SSHD_ADMIN_NET:
+  - 0.0.0.0/0  # ssh can be made from a public IP
+SSHD_LOGIN_GRACE_TIME: 60
+SSHD_MAX_AUTH_TRIES: 5
+SUID_SGID_PERMISSIONS: true
+AUTO_UPDATES_OPTIONS:
+  enabled: true
+  only_security: true
+  reboot: true
+  reboot_from_time: 2:00
+  reboot_time_margin_mins: '20'  # Random interval for reboot to avoid overloading hypervisors
+  custom_origins: ''
+LOGIND_HARDENING:
+  killuserprocesses: true
+  killexcludeusers: [root, vagrant]
+  idleaction: lock
+  idleactionsec: 15min
+  removeipc: true
