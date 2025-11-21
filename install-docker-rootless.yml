@@ -41,23 +41,12 @@
   # Pre-flight checks to ensure system compatibility
   pre_tasks:
 
-    - name: Validate kernel support for user namespaces
-      ansible.builtin.shell: |
-        if [ -f /proc/sys/user/max_user_namespaces ]; then
-          max_ns=$(cat /proc/sys/user/max_user_namespaces)
-          if [ "$max_ns" -gt 0 ]; then
-            echo "User namespaces supported (max: $max_ns)"
-          else
-            echo "User namespaces disabled"
-            exit 1
-          fi
-        else
-          echo "User namespace support unknown"
-        fi
-      register: namespace_check
-      changed_when: false
-      failed_when: namespace_check.rc != 0
-      tags: [validation, always]
+    - name: Check if unprivileged_userns AppArmor profile exists
+      ansible.builtin.stat:
+        path: /etc/apparmor.d/unprivileged_userns
+      become: true
+      register: unprivileged_userns_apparmor_profile
+      tags: [docker-config, apparmor]
 
     - name: Install pasta (passt) package for docker rootless networking
       ansible.builtin.apt:
@@ -143,43 +132,6 @@
   # Post-installation validation and information
   post_tasks:
 
-    # NOTE: Network driver configuration is now handled by the role using:
-    #   docker_driver_network: pasta
-    #   docker_driver_port: implicit
-    # No wrapper script needed!
-
-
-    # AppArmor configuration for unprivileged_userns (REQUIRED for rootless Docker)
-    # We keep the profile in ENFORCE mode but add minimal required capabilities
-    
-    - name: Check if unprivileged_userns AppArmor profile exists
-      ansible.builtin.stat:
-        path: /etc/apparmor.d/unprivileged_userns
-      become: true
-      register: unprivileged_userns_apparmor_profile
-      tags: [docker-config, apparmor]
-
-    - name: Backup original unprivileged_userns profile
-      ansible.builtin.copy:
-        src: /etc/apparmor.d/unprivileged_userns
-        dest: /etc/apparmor.d/unprivileged_userns.backup
-        remote_src: true
-        force: false  # Don't overwrite existing backup
-      become: true
-      when: unprivileged_userns_apparmor_profile.stat.exists
-      tags: [docker-config, apparmor]
-
-    - name: Comment out capability deny in unprivileged_userns profile
-      ansible.builtin.lineinfile:
-        path: /etc/apparmor.d/unprivileged_userns
-        regexp: '^(\s+)audit deny capability,$'
-        line: '\1# audit deny capability,  # Commented for Docker rootless - capabilities controlled via local overrides'
-        backrefs: true
-      become: true
-      when: unprivileged_userns_apparmor_profile.stat.exists
-      register: unprivileged_userns_profile_patched
-      tags: [docker-config, apparmor]
-
     - name: Ensure AppArmor local directory exists
       ansible.builtin.file:
         path: /etc/apparmor.d/local
@@ -190,18 +142,10 @@
       tags: [docker-config, apparmor]
 
     - name: Create minimal AppArmor local overrides for unprivileged_userns
-      ansible.builtin.copy:
+      ansible.builtin.template:
+        src: templates/apparmor-local-unprivileged_userns.j2
         dest: /etc/apparmor.d/local/unprivileged_userns
         mode: '0644'
-        content: |
-          # Minimal Docker rootless compatibility
-          capability setuid,
-          capability setgid,
-          
-          # Allow user namespace mapping files (owner-restricted)
-          owner @{PROC}/@{pid}/uid_map w,
-          owner @{PROC}/@{pid}/gid_map w,
-          owner @{PROC}/@{pid}/setgroups w,
       become: true
       when: unprivileged_userns_apparmor_profile.stat.exists
       register: unprivileged_userns_local_overrides
@@ -213,7 +157,7 @@
       become: true
       when:
         - unprivileged_userns_apparmor_profile.stat.exists
-        - unprivileged_userns_profile_patched.changed or unprivileged_userns_local_overrides.changed
+        - unprivileged_userns_local_overrides.changed
       tags: [docker-config, apparmor]
 
     - name: Configure Docker to use cgroupfs driver (bypasses systemd/polkit issues)
@@ -240,7 +184,6 @@
       become_user: "{{ DOCKER_USER | default('dockeruser') }}"
       when:
         - docker_daemon_config.changed
-          or (unprivileged_userns_profile_patched is defined and unprivileged_userns_profile_patched.changed)
           or (unprivileged_userns_local_overrides is defined and unprivileged_userns_local_overrides.changed)
       register: docker_restart_result
       retries: 3  # Retry up to 3 times for timing issues
@@ -295,6 +238,39 @@
       check_mode: true
       register: docker_user_info_final
       tags: [info, instructions, always]
+
+    - name: Start Nginx container for testing
+      ansible.builtin.shell: |
+        export PATH=$HOME/bin:$HOME/.local/bin:$PATH
+        export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock
+        docker run -d --name test-nginx -p 8080:80 nginx:alpine
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      tags: [test, always]
+
+    - name: Verify Nginx service
+      ansible.builtin.shell: |
+        curl --retry 5 --retry-delay 2 -f http://localhost:8080
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      tags: [test, always]
+
+    - name: Cleanup test container
+      ansible.builtin.shell: |
+        export PATH=$HOME/bin:$HOME/.local/bin:$PATH
+        export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock
+        docker rm -f test-nginx
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      ignore_errors: true
+      tags: [test, always]
+
 
     - name: Display Docker usage instructions
       ansible.builtin.debug:
