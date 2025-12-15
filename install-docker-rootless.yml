@@ -43,7 +43,7 @@
 
     - name: Check if unprivileged_userns AppArmor profile exists
       ansible.builtin.stat:
-        path: /etc/apparmor.d/unprivileged_userns
+        path: /etc/apparmor.d/local/unprivileged_userns
       become: true
       register: unprivileged_userns_apparmor_profile
       tags: [docker-config, apparmor]
@@ -84,7 +84,7 @@
       ansible.builtin.git:
         repo: https://github.com/konstruktoid/ansible-role-docker-rootless.git
         dest: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.docker_rootless"
-        version: 'v1.6.0'  # Pinned version for reproducibility
+        version: 'v1.9.0'  # Pinned version for reproducibility
       delegate_to: localhost
       run_once: true
       tags: [docker-setup, role-download]
@@ -132,64 +132,65 @@
   # Post-installation validation and information
   post_tasks:
 
-    - name: Ensure AppArmor local directory exists
-      ansible.builtin.file:
-        path: /etc/apparmor.d/local
-        state: directory
-        mode: '0755'
-      become: true
-      when: unprivileged_userns_apparmor_profile.stat.exists
-      tags: [docker-config, apparmor]
+    # - name: Ensure AppArmor local directory exists
+    #   ansible.builtin.file:
+    #     path: /etc/apparmor.d/local
+    #     state: directory
+    #     mode: '0755'
+    #   become: true
+    #   when: unprivileged_userns_apparmor_profile.stat.exists
+    #   tags: [docker-config, apparmor]
 
-    - name: Create minimal AppArmor local overrides for unprivileged_userns
-      ansible.builtin.template:
-        src: templates/apparmor-local-unprivileged_userns.j2
-        dest: /etc/apparmor.d/local/unprivileged_userns
-        mode: '0644'
-      become: true
-      when: unprivileged_userns_apparmor_profile.stat.exists
-      register: unprivileged_userns_local_overrides
-      tags: [docker-config, apparmor]
+    # - name: Create minimal AppArmor local overrides for unprivileged_userns
+    #   ansible.builtin.template:
+    #     src: templates/apparmor-local-unprivileged_userns.j2
+    #     dest: /etc/apparmor.d/local/unprivileged_userns
+    #     mode: '0644'
+    #   become: true
+    #   when: unprivileged_userns_apparmor_profile.stat.exists
+    #   register: unprivileged_userns_local_overrides
+    #   tags: [docker-config, apparmor]
 
-    - name: Reload unprivileged_userns AppArmor profile
-      ansible.builtin.command:
-        cmd: apparmor_parser -r /etc/apparmor.d/unprivileged_userns
-      become: true
-      when:
-        - unprivileged_userns_apparmor_profile.stat.exists
-        - unprivileged_userns_local_overrides.changed
-      tags: [docker-config, apparmor]
+    # - name: Reload unprivileged_userns AppArmor profile
+    #   ansible.builtin.command:
+    #     cmd: apparmor_parser -r /etc/apparmor.d/unprivileged_userns
+    #   become: true
+    #   when:
+    #     - unprivileged_userns_apparmor_profile.stat.exists
+    #     - unprivileged_userns_local_overrides.changed
+    #   tags: [docker-config, apparmor]
 
-    - name: Configure Docker to use cgroupfs driver (bypasses systemd/polkit issues)
-      ansible.builtin.copy:
-        dest: "/home/{{ DOCKER_USER | default('dockeruser') }}/.config/docker/daemon.json"
-        mode: '0644'
-        content: |
-          {
-            "exec-opts": ["native.cgroupdriver=cgroupfs"]
-          }
-      become: true
-      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
-      register: docker_daemon_config
-      tags: [docker-config]
+    # MAYBE RENABLE IF NEEDED
+    # - name: Configure Docker to use cgroupfs driver (bypasses systemd/polkit issues)
+    #   ansible.builtin.copy:
+    #     dest: "/home/{{ DOCKER_USER | default('dockeruser') }}/.config/docker/daemon.json"
+    #     mode: '0644'
+    #     content: |
+    #       {
+    #         "exec-opts": ["native.cgroupdriver=cgroupfs"]
+    #       }
+    #   become: true
+    #   become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+    #   register: docker_daemon_config
+    #   tags: [docker-config]
 
-    - name: Restart docker service if daemon.json or AppArmor changed
-      ansible.builtin.shell: |
-        export XDG_RUNTIME_DIR=/run/user/$(id -u)
-        systemctl --user daemon-reload
-        systemctl --user restart docker
-      args:
-        executable: /bin/bash
-      become: true
-      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
-      when:
-        - docker_daemon_config.changed
-          or (unprivileged_userns_local_overrides is defined and unprivileged_userns_local_overrides.changed)
-      register: docker_restart_result
-      retries: 3  # Retry up to 3 times for timing issues
-      delay: 2    # Wait 2 seconds between retries
-      until: docker_restart_result.rc == 0
-      tags: [docker-config, always]
+    # - name: Restart docker service if daemon.json or AppArmor changed
+    #   ansible.builtin.shell: |
+    #     export XDG_RUNTIME_DIR=/run/user/$(id -u)
+    #     systemctl --user daemon-reload
+    #     systemctl --user restart docker
+    #   args:
+    #     executable: /bin/bash
+    #   become: true
+    #   become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+    #   when:
+    #     - docker_daemon_config.changed
+    #       or (unprivileged_userns_local_overrides is defined and unprivileged_userns_local_overrides.changed)
+    #   register: docker_restart_result
+    #   retries: 3  # Retry up to 3 times for timing issues
+    #   delay: 2    # Wait 2 seconds between retries
+    #   until: docker_restart_result.rc == 0
+    #   tags: [docker-config, always]
 
     - name: Check Docker version for rootless user
       ansible.builtin.shell: "export PATH=$PATH:$HOME/.local/bin && export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock && docker --version"
