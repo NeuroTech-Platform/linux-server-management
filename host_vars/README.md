@@ -66,7 +66,7 @@ AUTO_UPDATES_OPTIONS:
   reboot: true
   reboot_from_time: "02:00"
   reboot_time_margin_mins: 20
-  custom_origins: '' # here you may add docker or follow the versions by updating the role
+  custom_origins: '' # here you may add what you need
 
 # === SECURITY HARDENING ===
 DISABLE_WIRELESS: true
@@ -110,7 +110,7 @@ cp host_vars/README-DOCKER-HOSTS.md host_vars/your-docker-host/vars.yml
 ```ini
 # inventories/production/inventory
 [docker-hosts]
-your-docker-host ansible_host=192.168.1.100 ansible_user=root
+your-docker-host ansible_host=192.168.1.100
 ```
 
 ### 3. Run Hardening Playbook
@@ -121,7 +121,7 @@ ansible-playbook -i inventories/production/inventory setup-playbook.yml \
 ```
 
 ### 4. Run Docker Installation
-Before that you will need to change "ansible_user" to your actual user in `inventories/production/inventory`
+Before that you will need to change you bash `$ANSIBLE_USER` to your actual user (instead of the bootstrap one), if needed.
 ```bash
 ansible-playbook -i inventories/production/inventory install-docker-rootless.yml \
   --limit your-docker-host

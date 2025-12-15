@@ -56,6 +56,13 @@
       become: true
       tags: [docker-setup, packages]
 
+    - name: Enable lingering for Docker user
+      ansible.builtin.command:
+        cmd: "loginctl enable-linger {{ DOCKER_USER | default('dockeruser') }}"
+        creates: "/var/lib/systemd/linger/{{ DOCKER_USER | default('dockeruser') }}"
+      become: true
+      tags: [docker-setup, user-config]
+
 
   tasks:
     # ===================================================================
@@ -88,6 +95,51 @@
       delegate_to: localhost
       run_once: true
       tags: [docker-setup, role-download]
+
+    # --- TEMP PATCH for konstruktoid.docker_rootless (threads-max lookup) ---
+
+    # 0) (Optional) Define the role path once
+    - name: Set local role path
+      ansible.builtin.set_fact:
+        _kdr_role_path: "{{ lookup('env','HOME') }}/.ansible/roles/konstruktoid.docker_rootless"
+      delegate_to: localhost
+      run_once: true
+      tags: [docker-setup, role-download]
+
+    # 1) Replace the LOCAL lookup() with a reference to a host fact
+    #    This matches both "file" and "ansible.builtin.file" forms.
+    - name: Patch pre.yml to stop local lookup of /proc/sys/kernel/threads-max
+      ansible.builtin.replace:
+        path: "{{ _kdr_role_path }}/tasks/pre.yml"
+        regexp: "lookup\\(['\"](?:ansible\\.builtin\\.)?file['\"],\\s*['\"]/proc/sys/kernel/threads-max['\"]\\)"
+        replace: "hostvars[inventory_hostname].threads_max"
+        backup: true
+      delegate_to: localhost
+      run_once: true
+      tags: [docker-setup, role-download]
+
+    - name: Show patched line (sanity check)
+      ansible.builtin.shell: |
+        grep -nE "threads_max:|/proc/sys/kernel/threads-max|lookup\(" "{{ _kdr_role_path }}/tasks/pre.yml" || true
+      delegate_to: localhost
+      run_once: true
+      changed_when: false
+      failed_when: false
+      tags: [docker-setup, role-download]
+
+    # 3) Read the value on the REMOTE host and store it as a host fact
+    - name: Read kernel threads-max on remote
+      ansible.builtin.slurp:
+        src: /proc/sys/kernel/threads-max
+      register: _threads_max_slurp
+      tags: [docker-setup]
+
+    - name: Set threads_max fact for this host (used by the patched role)
+      ansible.builtin.set_fact:
+        threads_max: "{{ _threads_max_slurp.content | b64decode | trim }}"
+      tags: [docker-setup]
+
+# --- END TEMP PATCH for konstruktoid.docker_rootless (threads-max lookup) ---
 
     # ===================================================================
     # DOCKER ROOTLESS INSTALLATION SECTION
@@ -160,37 +212,34 @@
     #     - unprivileged_userns_local_overrides.changed
     #   tags: [docker-config, apparmor]
 
-    # MAYBE RENABLE IF NEEDED
-    # - name: Configure Docker to use cgroupfs driver (bypasses systemd/polkit issues)
-    #   ansible.builtin.copy:
-    #     dest: "/home/{{ DOCKER_USER | default('dockeruser') }}/.config/docker/daemon.json"
-    #     mode: '0644'
-    #     content: |
-    #       {
-    #         "exec-opts": ["native.cgroupdriver=cgroupfs"]
-    #       }
-    #   become: true
-    #   become_user: "{{ DOCKER_USER | default('dockeruser') }}"
-    #   register: docker_daemon_config
-    #   tags: [docker-config]
+    - name: Configure Docker to use cgroupfs driver (bypasses systemd/polkit issues)
+      ansible.builtin.copy:
+        dest: "/home/{{ DOCKER_USER | default('dockeruser') }}/.config/docker/daemon.json"
+        mode: '0644'
+        content: |
+          {
+            "exec-opts": ["native.cgroupdriver=cgroupfs"]
+          }
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      register: docker_daemon_config
+      tags: [docker-config]
 
-    # - name: Restart docker service if daemon.json or AppArmor changed
-    #   ansible.builtin.shell: |
-    #     export XDG_RUNTIME_DIR=/run/user/$(id -u)
-    #     systemctl --user daemon-reload
-    #     systemctl --user restart docker
-    #   args:
-    #     executable: /bin/bash
-    #   become: true
-    #   become_user: "{{ DOCKER_USER | default('dockeruser') }}"
-    #   when:
-    #     - docker_daemon_config.changed
-    #       or (unprivileged_userns_local_overrides is defined and unprivileged_userns_local_overrides.changed)
-    #   register: docker_restart_result
-    #   retries: 3  # Retry up to 3 times for timing issues
-    #   delay: 2    # Wait 2 seconds between retries
-    #   until: docker_restart_result.rc == 0
-    #   tags: [docker-config, always]
+    - name: Restart docker service if daemon.json changed
+      ansible.builtin.shell: |
+        export XDG_RUNTIME_DIR=/run/user/$(id -u)
+        systemctl --user daemon-reload
+        systemctl --user restart docker
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      when: docker_daemon_config.changed
+      register: docker_restart_result
+      retries: 3
+      delay: 2
+      until: docker_restart_result.rc == 0
+      tags: [docker-config, always]
 
     - name: Check Docker version for rootless user
       ansible.builtin.shell: "export PATH=$PATH:$HOME/.local/bin && export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock && docker --version"
@@ -240,9 +289,23 @@
       register: docker_user_info_final
       tags: [info, instructions, always]
 
+    - name: Ensure previous test container is removed
+      ansible.builtin.shell: |
+        export PATH=$HOME/bin:$HOME/.local/bin:$PATH
+        export XDG_RUNTIME_DIR=/run/user/$(id -u)
+        export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock
+        docker rm -f test-nginx
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      ignore_errors: true
+      tags: [test, always]
+
     - name: Start Nginx container for testing
       ansible.builtin.shell: |
         export PATH=$HOME/bin:$HOME/.local/bin:$PATH
+        export XDG_RUNTIME_DIR=/run/user/$(id -u)
         export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock
         docker run -d --name test-nginx -p 8080:80 nginx:alpine
       args:
@@ -263,6 +326,7 @@
     - name: Cleanup test container
       ansible.builtin.shell: |
         export PATH=$HOME/bin:$HOME/.local/bin:$PATH
+        export XDG_RUNTIME_DIR=/run/user/$(id -u)
         export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock
         docker rm -f test-nginx
       args:
