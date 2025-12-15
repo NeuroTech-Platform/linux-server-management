@@ -100,10 +100,10 @@
       vars:
         # Suppress ansible-lint var-naming warning for third-party role variables
         # noqa: var-naming[no-role-prefix]
-        
+
         # === SECURITY CONFIGURATION ===
         docker_allow_privileged_ports: "{{ DOCKER_ALLOW_PRIVILEGED_PORTS | default(false) }}"  # Allow binding to ports <1024
-        
+
         # === DOCKER COMPOSE CONFIGURATION ===
         docker_compose: "{{ DOCKER_COMPOSE | default(true) }}"               # Install Docker Compose
         
@@ -122,7 +122,7 @@
         # === SERVICE MANAGEMENT ===
         docker_service_restart: true  # Let the role handle service restart properly
         docker_unattended_upgrades: "{{ DOCKER_UNATTENDED_UPGRADES | default(true) }}"  # Enable automatic Docker updates
-        
+
         # === USER CONFIGURATION ===
         create_docker_user: true
         docker_user_bashrc: "{{ DOCKER_USER_BASHRC | default(true) }}"  # Add Docker environment to user's .bashrc
