@@ -91,55 +91,10 @@
       ansible.builtin.git:
         repo: https://github.com/konstruktoid/ansible-role-docker-rootless.git
         dest: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.docker_rootless"
-        version: 'v1.9.0'  # Pinned version for reproducibility
+        version: 'ec91f6176ec7248ff55bd46fca5fc962cc3ac754'  # Pinned version for reproducibility - some commits after 1.9.0
       delegate_to: localhost
       run_once: true
       tags: [docker-setup, role-download]
-
-    # --- TEMP PATCH for konstruktoid.docker_rootless (threads-max lookup) ---
-
-    # 0) (Optional) Define the role path once
-    - name: Set local role path
-      ansible.builtin.set_fact:
-        _kdr_role_path: "{{ lookup('env','HOME') }}/.ansible/roles/konstruktoid.docker_rootless"
-      delegate_to: localhost
-      run_once: true
-      tags: [docker-setup, role-download]
-
-    # 1) Replace the LOCAL lookup() with a reference to a host fact
-    #    This matches both "file" and "ansible.builtin.file" forms.
-    - name: Patch pre.yml to stop local lookup of /proc/sys/kernel/threads-max
-      ansible.builtin.replace:
-        path: "{{ _kdr_role_path }}/tasks/pre.yml"
-        regexp: "lookup\\(['\"](?:ansible\\.builtin\\.)?file['\"],\\s*['\"]/proc/sys/kernel/threads-max['\"]\\)"
-        replace: "hostvars[inventory_hostname].threads_max"
-        backup: true
-      delegate_to: localhost
-      run_once: true
-      tags: [docker-setup, role-download]
-
-    - name: Show patched line (sanity check)
-      ansible.builtin.shell: |
-        grep -nE "threads_max:|/proc/sys/kernel/threads-max|lookup\(" "{{ _kdr_role_path }}/tasks/pre.yml" || true
-      delegate_to: localhost
-      run_once: true
-      changed_when: false
-      failed_when: false
-      tags: [docker-setup, role-download]
-
-    # 3) Read the value on the REMOTE host and store it as a host fact
-    - name: Read kernel threads-max on remote
-      ansible.builtin.slurp:
-        src: /proc/sys/kernel/threads-max
-      register: _threads_max_slurp
-      tags: [docker-setup]
-
-    - name: Set threads_max fact for this host (used by the patched role)
-      ansible.builtin.set_fact:
-        threads_max: "{{ _threads_max_slurp.content | b64decode | trim }}"
-      tags: [docker-setup]
-
-# --- END TEMP PATCH for konstruktoid.docker_rootless (threads-max lookup) ---
 
     # ===================================================================
     # DOCKER ROOTLESS INSTALLATION SECTION
@@ -183,34 +138,6 @@
 
   # Post-installation validation and information
   post_tasks:
-
-    # - name: Ensure AppArmor local directory exists
-    #   ansible.builtin.file:
-    #     path: /etc/apparmor.d/local
-    #     state: directory
-    #     mode: '0755'
-    #   become: true
-    #   when: unprivileged_userns_apparmor_profile.stat.exists
-    #   tags: [docker-config, apparmor]
-
-    # - name: Create minimal AppArmor local overrides for unprivileged_userns
-    #   ansible.builtin.template:
-    #     src: templates/apparmor-local-unprivileged_userns.j2
-    #     dest: /etc/apparmor.d/local/unprivileged_userns
-    #     mode: '0644'
-    #   become: true
-    #   when: unprivileged_userns_apparmor_profile.stat.exists
-    #   register: unprivileged_userns_local_overrides
-    #   tags: [docker-config, apparmor]
-
-    # - name: Reload unprivileged_userns AppArmor profile
-    #   ansible.builtin.command:
-    #     cmd: apparmor_parser -r /etc/apparmor.d/unprivileged_userns
-    #   become: true
-    #   when:
-    #     - unprivileged_userns_apparmor_profile.stat.exists
-    #     - unprivileged_userns_local_overrides.changed
-    #   tags: [docker-config, apparmor]
 
     - name: Configure Docker to use cgroupfs driver (bypasses systemd/polkit issues)
       ansible.builtin.copy:
