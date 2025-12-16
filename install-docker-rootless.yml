@@ -31,7 +31,7 @@
 #   ansible-playbook -i inventory install-docker-rootless.yml -e DOCKER_USER=myuser
 #
 # Based on: https://github.com/konstruktoid/ansible-role-docker-rootless
-# Licensed under: Apache License 2.0
+# Licensed under: Apache License 2.0.
 #
 
 - name: Install Docker in Rootless Mode
