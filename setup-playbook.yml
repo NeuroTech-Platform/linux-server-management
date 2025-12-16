@@ -176,7 +176,7 @@
         disable_root_account: "{{ DISABLE_ROOT_ACCOUNT | default(true) }}"  # Disable root login
         manage_users: "{{ MANAGE_USERS }}"                       # Enable user account management
         manage_packages: true                                     # Enable package management (removal/installation)
-        delete_users: ["games", "gnats", "irc", "list", "news", "sync", "uucp","ubuntu","debian"]
+        delete_users: ["games", "gnats", "irc", "list", "news", "sync", "uucp", "ubuntu", "debian"]
 
         # === SYSTEM COMPONENT MANAGEMENT ===
         # Each option controls whether the hardening role manages specific system components

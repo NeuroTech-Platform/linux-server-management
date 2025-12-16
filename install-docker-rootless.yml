@@ -113,13 +113,13 @@
 
         # === DOCKER COMPOSE CONFIGURATION ===
         docker_compose: "{{ DOCKER_COMPOSE | default(true) }}"               # Install Docker Compose
-        
+
         # === ROOTFUL DOCKER CONFIGURATION ===
         # These options control traditional rootful Docker (usually disabled for security)
         docker_rootful_enabled: "{{ DOCKER_ROOTFUL_ENABLED | default(false) }}"  # Enable traditional Docker daemon
         docker_rootful: "{{ DOCKER_ROOTFUL | default(false) }}"                  # Install rootful Docker alongside rootless
         docker_rootful_opts: "{{ DOCKER_ROOTFUL_OPTS | default(false) }}"        # Additional rootful Docker options
-        
+
         # === NETWORK DRIVER CONFIGURATION ===
         # pasta: Modern, better AppArmor compatibility, works with hidepid=2
         docker_driver_network: "{{ DOCKER_NETWORK_DRIVER | default('pasta') }}"
@@ -133,7 +133,7 @@
         # === USER CONFIGURATION ===
         create_docker_user: true
         docker_user_bashrc: "{{ DOCKER_USER_BASHRC | default(true) }}"  # Add Docker environment to user's .bashrc
-        docker_user: "{{ DOCKER_USER | default('dockeruser') }}"        # Username for Docker installation            
+        docker_user: "{{ DOCKER_USER | default('dockeruser') }}"        # Username for Docker installation
       tags: [docker-installation, docker-config]
 
   # Post-installation validation and information
@@ -150,23 +150,10 @@
       become: true
       become_user: "{{ DOCKER_USER | default('dockeruser') }}"
       register: docker_daemon_config
+      notify: Restart rootless docker
       tags: [docker-config]
 
-    - name: Restart docker service if daemon.json changed
-      ansible.builtin.shell: |
-        export XDG_RUNTIME_DIR=/run/user/$(id -u)
-        systemctl --user daemon-reload
-        systemctl --user restart docker
-      args:
-        executable: /bin/bash
-      become: true
-      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
-      when: docker_daemon_config.changed
-      register: docker_restart_result
-      retries: 3
-      delay: 2
-      until: docker_restart_result.rc == 0
-      tags: [docker-config, always]
+
 
     - name: Check Docker version for rootless user
       ansible.builtin.shell: "export PATH=$PATH:$HOME/.local/bin && export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock && docker --version"
@@ -226,7 +213,9 @@
         executable: /bin/bash
       become: true
       become_user: "{{ DOCKER_USER | default('dockeruser') }}"
-      ignore_errors: true
+      register: remove_test_container_pre
+      failed_when: remove_test_container_pre.rc != 0 and 'No such container' not in remove_test_container_pre.stderr
+      changed_when: remove_test_container_pre.rc == 0
       tags: [test, always]
 
     - name: Start Nginx container for testing
@@ -239,6 +228,7 @@
         executable: /bin/bash
       become: true
       become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      changed_when: true
       tags: [test, always]
 
     - name: Verify Nginx service
@@ -248,6 +238,8 @@
         executable: /bin/bash
       become: true
       become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      changed_when: false
+      # noqa: command-instead-of-module
       tags: [test, always]
 
     - name: Cleanup test container
@@ -260,7 +252,9 @@
         executable: /bin/bash
       become: true
       become_user: "{{ DOCKER_USER | default('dockeruser') }}"
-      ignore_errors: true
+      register: remove_test_container_post
+      failed_when: remove_test_container_post.rc != 0 and 'No such container' not in remove_test_container_post.stderr
+      changed_when: remove_test_container_post.rc == 0
       tags: [test, always]
 
 
@@ -289,3 +283,20 @@
           - "- Test slirp4netns: /usr/bin/slirp4netns --help"
           - "- To debug AppArmor, set DOCKER_APPARMOR_COMPLAIN_MODE=true and re-run"
       tags: [info, instructions, always]
+
+  handlers:
+    - name: Restart rootless docker
+      ansible.builtin.shell: |
+        export XDG_RUNTIME_DIR=/run/user/$(id -u)
+        systemctl --user daemon-reload
+        systemctl --user restart docker
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      register: docker_restart_result
+      changed_when: true
+      retries: 3
+      delay: 2
+      until: docker_restart_result.rc == 0
+
