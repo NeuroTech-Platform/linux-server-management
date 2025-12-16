@@ -153,8 +153,6 @@
       notify: Restart rootless docker
       tags: [docker-config]
 
-
-
     - name: Check Docker version for rootless user
       ansible.builtin.shell: "export PATH=$PATH:$HOME/.local/bin && export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock && docker --version"
       register: docker_version_check
@@ -299,4 +297,3 @@
       retries: 3
       delay: 2
       until: docker_restart_result.rc == 0
-
