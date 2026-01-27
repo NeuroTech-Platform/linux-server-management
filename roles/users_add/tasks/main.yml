@@ -15,7 +15,9 @@
       # Sets the initial password that is prompted to change at first ssh login with pubkey (only)
     update_password: on_create  # This ensures the password is only set when the user is created
   loop: "{{ users_add_userlist | default([]) }}"
-  notify: Force password change on first login
+  notify:
+    - Force password change on first login
+    - Force 2FA enrollment on first login
   no_log: true  # Prevent password hashes from being logged
 
 - name: Add additional public keys
@@ -338,3 +340,92 @@
         mode: '0644'
         state: touch
       when: users_add_update_motd_exists.rc != 0
+# ===================================================================
+# 2FA (TOTP) CONFIGURATION SECTION
+# ===================================================================
+
+- name: Install libpam-google-authenticator
+  ansible.builtin.package:
+    name: libpam-google-authenticator
+    state: present
+  when: ENABLE_2FA | default(false)
+
+- name: Configure PAM for 2FA
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/sshd
+    line: "auth required pam_google_authenticator.so nullok"
+    insertafter: "@include common-auth"
+    state: "{{ 'present' if (ENABLE_2FA | default(false)) else 'absent' }}"
+  become: true
+
+- name: Create 2FA enrollment script
+  ansible.builtin.copy:
+    dest: /usr/local/bin/force-2fa-enrollment
+    mode: '0755'
+    content: |
+      #!/bin/bash
+      # Script to force 2FA enrollment on first login
+      FLAG_FILE="$HOME/.force_2fa_enrollment"
+      if [ -f "$FLAG_FILE" ]; then
+          echo "==============================================================================="
+          echo "SECURITY REQUIREMENT: Two-Factor Authentication (2FA) Setup"
+          echo "==============================================================================="
+          echo "You must set up TOTP-based 2FA (Google Authenticator, Authy, Bitwarden, etc.)"
+          echo "to continue using this account."
+          echo ""
+          google-authenticator -t -d -f -r 3 -R 30 -w 3
+          if [ $? -eq 0 ]; then
+              rm "$FLAG_FILE"
+              echo ""
+              echo "2FA setup successful! Please use your TOTP app for future logins."
+              echo "==============================================================================="
+          else
+              echo ""
+              echo "2FA setup failed. You will be prompted again at next login."
+              echo "==============================================================================="
+              exit 1
+          fi
+      fi
+  when: ENABLE_2FA | default(false)
+
+- name: Add 2FA enrollment to shell profile
+  ansible.builtin.copy:
+    dest: /etc/profile.d/force-2fa-enrollment.sh
+    mode: '0644'
+    content: |
+      # Trigger 2FA enrollment if flag file exists
+      if [ -n "$SSH_TTY" ] && [ -f "$HOME/.force_2fa_enrollment" ]; then
+          /usr/local/bin/force-2fa-enrollment
+      fi
+  when: ENABLE_2FA | default(false)
+
+- name: Check if 2FA is already configured for users
+  ansible.builtin.stat:
+    path: "/home/{{ item.username }}/.google_authenticator"
+  loop: "{{ users_add_userlist | default([]) }}"
+  register: users_2fa_stat
+  when: ENABLE_2FA | default(false)
+
+- name: Force 2FA enrollment for existing users who haven't set it up
+  ansible.builtin.file:
+    path: "/home/{{ item.0.username }}/.force_2fa_enrollment"
+    state: touch
+    owner: "{{ item.0.username }}"
+    group: "{{ item.0.username }}"
+    mode: '0600'
+  loop: "{{ users_add_userlist | zip(users_2fa_stat.results) | list }}"
+  when:
+    - ENABLE_2FA | default(false)
+    - item.0.enable_2fa | default(true)
+    - not item.1.stat.exists
+    - not ansible_check_mode
+  label: "{{ item.0.username }}"
+
+- name: Remove 2FA enrollment from shell profile if disabled
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /usr/local/bin/force-2fa-enrollment
+    - /etc/profile.d/force-2fa-enrollment.sh
+  when: not (ENABLE_2FA | default(false))
