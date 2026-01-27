@@ -93,7 +93,7 @@
           become: true
       vars:
         users_add_userlist: "{{ SSH_USERLIST }}"
-        ENABLE_2FA: "{{ ENABLE_2FA }}"
+        enable_2fa: "{{ ENABLE_2FA }}"
       when: MANAGE_USERS is not defined or MANAGE_USERS | bool
       tags: [users, user-management]
 

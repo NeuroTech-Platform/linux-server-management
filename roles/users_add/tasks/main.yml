@@ -348,14 +348,14 @@
   ansible.builtin.package:
     name: libpam-google-authenticator
     state: present
-  when: ENABLE_2FA | default(false)
+  when: enable_2fa | default(false)
 
 - name: Configure PAM for 2FA
   ansible.builtin.lineinfile:
     path: /etc/pam.d/sshd
     line: "auth required pam_google_authenticator.so nullok"
     insertafter: "@include common-auth"
-    state: "{{ 'present' if (ENABLE_2FA | default(false)) else 'absent' }}"
+    state: "{{ 'present' if (enable_2fa | default(false)) else 'absent' }}"
   become: true
 
 - name: Create 2FA enrollment script
@@ -386,7 +386,7 @@
               exit 1
           fi
       fi
-  when: ENABLE_2FA | default(false)
+  when: enable_2fa | default(false)
 
 - name: Add 2FA enrollment to shell profile
   ansible.builtin.copy:
@@ -397,14 +397,14 @@
       if [ -n "$SSH_TTY" ] && [ -f "$HOME/.force_2fa_enrollment" ]; then
           /usr/local/bin/force-2fa-enrollment
       fi
-  when: ENABLE_2FA | default(false)
+  when: enable_2fa | default(false)
 
 - name: Check if 2FA is already configured for users
   ansible.builtin.stat:
     path: "/home/{{ item.username }}/.google_authenticator"
   loop: "{{ users_add_userlist | default([]) }}"
   register: users_2fa_stat
-  when: ENABLE_2FA | default(false)
+  when: enable_2fa | default(false)
 
 - name: Force 2FA enrollment for existing users who haven't set it up
   ansible.builtin.file:
@@ -414,12 +414,13 @@
     group: "{{ item.0.username }}"
     mode: '0600'
   loop: "{{ users_add_userlist | zip(users_2fa_stat.results) | list }}"
+  loop_control:
+    label: "{{ item.0.username }}"
   when:
-    - ENABLE_2FA | default(false)
+    - enable_2fa | default(false)
     - item.0.enable_2fa | default(true)
     - not item.1.stat.exists
     - not ansible_check_mode
-  label: "{{ item.0.username }}"
 
 - name: Remove 2FA enrollment from shell profile if disabled
   ansible.builtin.file:
@@ -428,4 +429,4 @@
   loop:
     - /usr/local/bin/force-2fa-enrollment
     - /etc/profile.d/force-2fa-enrollment.sh
-  when: not (ENABLE_2FA | default(false))
+  when: not (enable_2fa | default(false))

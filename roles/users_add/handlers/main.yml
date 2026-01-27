@@ -13,6 +13,6 @@
     group: "{{ item.username }}"
     mode: '0600'
   loop: "{{ users_add_userlist | default([]) }}"
-  when: 
-    - ENABLE_2FA | default(false)
+  when:
+    - enable_2fa | default(false)
     - item.enable_2fa | default(true)
