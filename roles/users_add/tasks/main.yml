@@ -353,7 +353,7 @@
 - name: Configure PAM for 2FA
   ansible.builtin.lineinfile:
     path: /etc/pam.d/sshd
-    line: "auth required pam_google_authenticator.so nullok"
+    line: "auth required pam_google_authenticator.so"
     insertafter: "@include common-auth"
     state: "{{ 'present' if (enable_2fa | default(false)) else 'absent' }}"
   become: true
@@ -373,7 +373,7 @@
           echo "You must set up TOTP-based 2FA (Google Authenticator, Authy, Bitwarden, etc.)"
           echo "to continue using this account."
           echo ""
-          google-authenticator -t -d -f -r 3 -R 30 -w 3
+          google-authenticator -t -d -f -r 3 -R 30 -w 3 -q
           if [ $? -eq 0 ]; then
               rm "$FLAG_FILE"
               echo ""
