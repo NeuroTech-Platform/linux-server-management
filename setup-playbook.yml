@@ -178,7 +178,7 @@
         sshd_use_pam: "{{ ENABLE_2FA | bool or SSHD_USE_PAM | default(true) }}"
         sshd_kbd_interactive_authentication: "{{ ENABLE_2FA | bool or SSHD_KBD_INTERACTIVE_AUTHENTICATION | default(true) }}"
         sshd_password_authentication: "{{ SSHD_PASSWORD_AUTHENTICATION | default(false) }}"
-        sshd_authentication_methods: "{{ 'publickey,keyboard-interactive:pam' if ENABLE_2FA | bool else omit }}"
+        sshd_authentication_methods: "{{ 'publickey,keyboard-interactive:pam' if (ENABLE_2FA | default(false) | bool) else 'publickey' }}"
 
         # === SYSTEM SECURITY ===
         disable_apport: true                                      # Disable Ubuntu crash reporting

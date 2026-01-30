@@ -343,6 +343,24 @@
 # 2FA (TOTP) CONFIGURATION SECTION
 # ===================================================================
 
+- name: Create no2fa group for service accounts (exempt from 2FA)
+  ansible.builtin.group:
+    name: no2fa
+    state: present
+    system: true
+  when: enable_2fa | default(false)
+
+- name: Add service accounts to no2fa group
+  ansible.builtin.user:
+    name: "{{ item.username }}"
+    groups: no2fa
+    append: true
+  loop: "{{ users_add_userlist | default([]) }}"
+  when:
+    - enable_2fa | default(false)
+    - item.enable_2fa is defined
+    - not item.enable_2fa
+
 - name: Install libpam-google-authenticator
   ansible.builtin.package:
     name: libpam-google-authenticator
@@ -444,6 +462,9 @@
     insertbefore: "@include common-auth"
     marker: "# {mark} ANSIBLE MANAGED BLOCK - 2FA enrollment and authentication"
     block: |
+      # Skip 2FA for service accounts in no2fa group (e.g., ansible automation)
+      # success=done means auth succeeds immediately if user is in no2fa group
+      auth  [success=done default=ignore] pam_succeed_if.so user ingroup no2fa
       # Force 2FA enrollment if secret doesn't exist (denies login if canceled)
       auth  requisite pam_exec.so stdout /usr/local/sbin/ga-enroll-if-needed
       # Require 2FA authentication using centrally-stored secrets
