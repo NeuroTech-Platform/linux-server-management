@@ -477,29 +477,6 @@
     path: /usr/local/bin/force-2fa-enrollment
     state: absent
 
-- name: Check if 2FA is already configured for users
-  ansible.builtin.stat:
-    path: "/home/{{ item.username }}/.google_authenticator"
-  loop: "{{ users_add_userlist | default([]) }}"
-  register: users_2fa_stat
-  when: enable_2fa | default(false)
-
-- name: Force 2FA enrollment for existing users who haven't set it up
-  ansible.builtin.file:
-    path: "/home/{{ item.0.username }}/.force_2fa_enrollment"
-    state: touch
-    owner: "{{ item.0.username }}"
-    group: "{{ item.0.username }}"
-    mode: '0600'
-  loop: "{{ users_add_userlist | zip(users_2fa_stat.results) | list }}"
-  loop_control:
-    label: "{{ item.0.username }}"
-  when:
-    - enable_2fa | default(false)
-    - item.0.enable_2fa | default(true)
-    - not item.1.stat.exists
-    - not ansible_check_mode
-
 - name: Remove 2FA enrollment from shell profile if disabled
   ansible.builtin.file:
     path: "{{ item }}"
