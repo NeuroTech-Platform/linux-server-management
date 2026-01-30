@@ -358,6 +358,12 @@
     mode: '0700'
   when: enable_2fa | default(false)
 
+- name: Install qrencode for QR code display
+  ansible.builtin.package:
+    name: qrencode
+    state: present
+  when: enable_2fa | default(false)
+
 - name: Create 2FA enrollment script (pam_exec approach)
   ansible.builtin.copy:
     dest: /usr/local/sbin/ga-enroll-if-needed
@@ -384,7 +390,7 @@
       echo "==============================================================================="
       echo "SECURITY REQUIREMENT: Two-Factor Authentication (2FA) Setup"
       echo "==============================================================================="
-      echo "You must set up TOTP-based 2FA (Aegis, Google Authenticator, Authy, Bitwarden, etc..., etc.)"
+      echo "You must set up TOTP-based 2FA (Aegis, Google Authenticator, Authy, Bitwarden, etc.)"
       echo "Please scan the QR code below with your authenticator app."
       echo "Save the emergency scratch codes in a secure location."
       echo ""
@@ -398,10 +404,9 @@
       # -w 3: window of 3 codes (compensates for time skew)
       # -s: secret file location
       # -e 5: generate 5 emergency codes
-      # -Q utf8: force UTF8 QR code output (works without TTY detection)
+      # -Q none: suppress google-authenticator QR (we generate our own because it would not display)
       # Pipe -1 to skip the code verification prompt (no TTY available in pam_exec)
-      # The -f flag ensures the file is written even when skipping verification
-      echo "-1" | google-authenticator -t -d -f -r 3 -R 30 -w 3 -e 5 -Q utf8 -s "$secret"
+      echo "-1" | google-authenticator -t -d -f -r 3 -R 30 -w 3 -e 5 -Q none -s "$secret"
       
       # Must exist and be non-empty, otherwise deny login
       if [ ! -s "$secret" ]; then
@@ -411,6 +416,21 @@
       fi
       
       chmod 0600 "$secret"
+      
+      # Extract secret key and generate QR code ourselves using qrencode
+      secret_key=$(head -1 "$secret")
+      hostname=$(hostname)
+      otpauth_url="otpauth://totp/${user}@${hostname}?secret=${secret_key}&issuer=${hostname}"
+      
+      echo ""
+      echo "Scan this QR code with your authenticator app:"
+      echo ""
+      echo "$otpauth_url" | qrencode -t ANSIUTF8
+      echo ""
+      echo "Or manually enter this secret key: $secret_key"
+      echo ""
+      echo "Your emergency scratch codes (save these securely):"
+      grep -E '^[0-9]{8}$' "$secret" | sed 's/^/  /'
       echo ""
       echo "2FA setup successful! Please use your TOTP app for future logins."
       echo "==============================================================================="
