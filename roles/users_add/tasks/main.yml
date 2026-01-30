@@ -12,12 +12,11 @@
     comment: "{{ item.username }} account. Is admin? {{ item.admin }}"
     shell: /bin/bash
     password: "{{ item.initialpassword | default(GENERALINITIALPASSWORD) | password_hash('sha512') }}"
-      # Sets the initial password that is prompted to change at first ssh login with pubkey (only)
+      # Initial password required for sudo - must be changed on first login
     update_password: on_create  # This ensures the password is only set when the user is created
   loop: "{{ users_add_userlist | default([]) }}"
   notify:
     - Force password change on first login
-    - Force 2FA enrollment on first login
   no_log: true  # Prevent password hashes from being logged
 
 - name: Add additional public keys
@@ -134,7 +133,7 @@
     name: update-notifier-common
     state: present
   failed_when: false  # Don't fail if package doesn't exist
-  when: ansible_distribution == "Ubuntu"
+  when: ansible_facts["distribution"] == "Ubuntu"
 
 - name: Create cache directory for MOTD security status
   ansible.builtin.file:
@@ -302,7 +301,7 @@
     daemon_reload: true
 
 - name: Setup MOTD for Debian systems
-  when: ansible_os_family == "Debian"
+  when: ansible_facts["os_family"] == "Debian"
   block:
     - name: Check if this is a Debian-based system without update-motd
       ansible.builtin.command: which update-motd
@@ -316,7 +315,7 @@
         line: "session optional pam_motd.so motd=/run/motd.dynamic"
         insertafter: "# Print the message of the day upon successful login"
         state: present
-      when: ansible_distribution == "Ubuntu" and users_add_update_motd_exists.rc != 0
+      when: ansible_facts["distribution"] == "Ubuntu" and users_add_update_motd_exists.rc != 0
 
     - name: Create PAM MOTD configuration for Debian
       ansible.builtin.lineinfile:
@@ -325,7 +324,7 @@
         insertafter: "# Print the message of the day upon successful login"
         state: present
       become: true
-      when: ansible_distribution == "Debian" and users_add_update_motd_exists.rc != 0
+      when: ansible_facts["distribution"] == "Debian" and users_add_update_motd_exists.rc != 0
 
     - name: Generate initial security status and dynamic MOTD
       ansible.builtin.command: /usr/local/bin/update-security-status
@@ -350,54 +349,113 @@
     state: present
   when: enable_2fa | default(false)
 
-- name: Configure PAM for 2FA
-  ansible.builtin.lineinfile:
+- name: Create 2FA secrets directory
+  ansible.builtin.file:
+    path: /var/lib/google-authenticator
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  when: enable_2fa | default(false)
+
+- name: Create 2FA enrollment script (pam_exec approach)
+  ansible.builtin.copy:
+    dest: /usr/local/sbin/ga-enroll-if-needed
+    owner: root
+    group: root
+    mode: '0755'
+    content: |
+      #!/bin/sh
+      set -eu
+      
+      user="${PAM_USER:?missing PAM_USER}"
+      base="/var/lib/google-authenticator"
+      secret="$base/$user"
+      
+      # Already enrolled?
+      if [ -s "$secret" ]; then
+        exit 0
+      fi
+      
+      umask 077
+      mkdir -p "$base"
+      chmod 0700 "$base"
+      
+      echo "==============================================================================="
+      echo "SECURITY REQUIREMENT: Two-Factor Authentication (2FA) Setup"
+      echo "==============================================================================="
+      echo "You must set up TOTP-based 2FA (Aegis, Google Authenticator, Authy, Bitwarden, etc..., etc.)"
+      echo "Please scan the QR code below with your authenticator app."
+      echo "Save the emergency scratch codes in a secure location."
+      echo ""
+      
+      # Run enrollment with all options pre-configured
+      # -t: time-based TOTP
+      # -d: disallow token reuse (security)
+      # -f: force write without confirmation
+      # -r 3: rate limit to 3 attempts
+      # -R 30: rate limit window of 30 seconds  
+      # -w 3: window of 3 codes (compensates for time skew)
+      # -s: secret file location
+      # -e 5: generate 5 emergency codes
+      # -Q utf8: force UTF8 QR code output (works without TTY detection)
+      # Pipe -1 to skip the code verification prompt (no TTY available in pam_exec)
+      # The -f flag ensures the file is written even when skipping verification
+      echo "-1" | google-authenticator -t -d -f -r 3 -R 30 -w 3 -e 5 -Q utf8 -s "$secret"
+      
+      # Must exist and be non-empty, otherwise deny login
+      if [ ! -s "$secret" ]; then
+        echo ""
+        echo "2FA enrollment failed or was canceled. Login denied."
+        exit 1
+      fi
+      
+      chmod 0600 "$secret"
+      echo ""
+      echo "2FA setup successful! Please use your TOTP app for future logins."
+      echo "==============================================================================="
+      
+      exit 0
+  when: enable_2fa | default(false)
+
+- name: Configure PAM to force enrollment with pam_exec
+  ansible.builtin.blockinfile:
     path: /etc/pam.d/sshd
-    line: "auth required pam_google_authenticator.so"
-    insertafter: "@include common-auth"
+    insertbefore: "@include common-auth"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - 2FA enrollment and authentication"
+    block: |
+      # Force 2FA enrollment if secret doesn't exist (denies login if canceled)
+      auth  requisite pam_exec.so stdout /usr/local/sbin/ga-enroll-if-needed
+      # Require 2FA authentication using centrally-stored secrets
+      auth  required  pam_google_authenticator.so user=root secret=/var/lib/google-authenticator/${USER}
     state: "{{ 'present' if (enable_2fa | default(false)) else 'absent' }}"
   become: true
 
-- name: Create 2FA enrollment script
-  ansible.builtin.copy:
-    dest: /usr/local/bin/force-2fa-enrollment
-    mode: '0755'
-    content: |
-      #!/bin/bash
-      # Script to force 2FA enrollment on first login
-      FLAG_FILE="$HOME/.force_2fa_enrollment"
-      if [ -f "$FLAG_FILE" ]; then
-          echo "==============================================================================="
-          echo "SECURITY REQUIREMENT: Two-Factor Authentication (2FA) Setup"
-          echo "==============================================================================="
-          echo "You must set up TOTP-based 2FA (Google Authenticator, Authy, Bitwarden, etc.)"
-          echo "to continue using this account."
-          echo ""
-          google-authenticator -t -d -f -r 3 -R 30 -w 3 -q
-          if [ $? -eq 0 ]; then
-              rm "$FLAG_FILE"
-              echo ""
-              echo "2FA setup successful! Please use your TOTP app for future logins."
-              echo "==============================================================================="
-          else
-              echo ""
-              echo "2FA setup failed. You will be prompted again at next login."
-              echo "==============================================================================="
-              exit 1
-          fi
-      fi
+- name: Disable password authentication in PAM when 2FA is enabled
+  ansible.builtin.replace:
+    path: /etc/pam.d/sshd
+    regexp: '^(@include common-auth)$'
+    replace: '# \1  # Disabled for pubkey+2FA authentication'
+  become: true
   when: enable_2fa | default(false)
 
-- name: Add 2FA enrollment to shell profile
-  ansible.builtin.copy:
-    dest: /etc/profile.d/force-2fa-enrollment.sh
-    mode: '0644'
-    content: |
-      # Trigger 2FA enrollment if flag file exists
-      if [ -n "$SSH_TTY" ] && [ -f "$HOME/.force_2fa_enrollment" ]; then
-          /usr/local/bin/force-2fa-enrollment
-      fi
-  when: enable_2fa | default(false)
+- name: Re-enable password authentication in PAM when 2FA is disabled
+  ansible.builtin.replace:
+    path: /etc/pam.d/sshd
+    regexp: '^# (@include common-auth).*Disabled for pubkey\+2FA.*$'
+    replace: '\1'
+  become: true
+  when: not (enable_2fa | default(false))
+
+- name: Remove old 2FA shell profile script if it exists
+  ansible.builtin.file:
+    path: /etc/profile.d/force-2fa-enrollment.sh
+    state: absent
+
+- name: Remove old 2FA enrollment script if it exists
+  ansible.builtin.file:
+    path: /usr/local/bin/force-2fa-enrollment
+    state: absent
 
 - name: Check if 2FA is already configured for users
   ansible.builtin.stat:

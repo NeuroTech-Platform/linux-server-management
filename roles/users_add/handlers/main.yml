@@ -5,14 +5,3 @@
   loop: "{{ users_add_userlist | default([]) }}"
   register: chage_output  # This will register the output of the command to a variable
   changed_when: "'Password aging updated' in chage_output.stdout"
-- name: Force 2FA enrollment on first login
-  ansible.builtin.file:
-    path: "/home/{{ item.username }}/.force_2fa_enrollment"
-    state: touch
-    owner: "{{ item.username }}"
-    group: "{{ item.username }}"
-    mode: '0600'
-  loop: "{{ users_add_userlist | default([]) }}"
-  when:
-    - enable_2fa | default(false)
-    - item.enable_2fa | default(true)

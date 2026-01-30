@@ -241,7 +241,7 @@
         insertafter: "# Print the message of the day upon successful login"
         state: present
       become: true
-      when: ansible_os_family == "Debian"
+      when: ansible_facts["os_family"] == "Debian"
 
   # Post-execution validation and reporting
   post_tasks:
