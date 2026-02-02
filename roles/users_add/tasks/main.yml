@@ -391,20 +391,20 @@
     content: |
       #!/bin/sh
       set -eu
-      
+
       user="${PAM_USER:?missing PAM_USER}"
       base="/var/lib/google-authenticator"
       secret="$base/$user"
-      
+
       # Already enrolled?
       if [ -s "$secret" ]; then
         exit 0
       fi
-      
+
       umask 077
       mkdir -p "$base"
       chmod 0700 "$base"
-      
+
       echo "==============================================================================="
       echo "SECURITY REQUIREMENT: Two-Factor Authentication (2FA) Setup"
       echo "==============================================================================="
@@ -412,34 +412,34 @@
       echo "Please scan the QR code below with your authenticator app."
       echo "Save the emergency scratch codes in a secure location."
       echo ""
-      
+
       # Run enrollment with all options pre-configured
       # -t: time-based TOTP
       # -d: disallow token reuse (security)
       # -f: force write without confirmation
       # -r 3: rate limit to 3 attempts
-      # -R 30: rate limit window of 30 seconds  
+      # -R 30: rate limit window of 30 seconds
       # -w 3: window of 3 codes (compensates for time skew)
       # -s: secret file location
       # -e 5: generate 5 emergency codes
       # -Q none: suppress google-authenticator QR (we generate our own because it would not display)
       # Pipe -1 to skip the code verification prompt (no TTY available in pam_exec)
       echo "-1" | google-authenticator -t -d -f -r 3 -R 30 -w 3 -e 5 -Q none -s "$secret"
-      
+
       # Must exist and be non-empty, otherwise deny login
       if [ ! -s "$secret" ]; then
         echo ""
         echo "2FA enrollment failed or was canceled. Login denied."
         exit 1
       fi
-      
+
       chmod 0600 "$secret"
-      
+
       # Extract secret key and generate QR code ourselves using qrencode
       secret_key=$(head -1 "$secret")
       hostname=$(hostname)
       otpauth_url="otpauth://totp/${user}@${hostname}?secret=${secret_key}&issuer=${hostname}"
-      
+
       echo ""
       echo "Scan this QR code with your authenticator app:"
       echo ""
@@ -452,7 +452,7 @@
       echo ""
       echo "2FA setup successful! Please use your TOTP app for future logins."
       echo "==============================================================================="
-      
+
       exit 0
   when: enable_2fa | default(false)
 
