@@ -16,7 +16,6 @@ on:
       - "requirements.yml"
       - "testing/**"
       - ".ansible-lint"
-      - ".github/workflows/deps-new-version-test.yml"
   workflow_dispatch: {}
 jobs:
   vagrant-test-new-deps-version:

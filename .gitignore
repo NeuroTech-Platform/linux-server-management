@@ -2,6 +2,7 @@
 !inventories/
 inventories/*/*
 inventories/*.yml
+inventories/**/vars.yml
 !group_vars/
 group_vars/*/*
 group_vars/*.yml
