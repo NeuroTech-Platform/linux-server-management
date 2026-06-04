@@ -69,16 +69,21 @@ jobs:
       - name: Disable KVM to allow VirtualBox
         run: |
           set -euxo pipefail
-          # GitHub-hosted runners often have KVM modules loaded, which prevents VirtualBox from using VT-x/AMD-V.
+          echo "ImageOS=${ImageOS:-unknown}"
+          echo "ImageVersion=${ImageVersion:-unknown}"
+          uname -a
+          lsmod | grep -E '^(kvm|vbox)' || true
+          VBoxManage --version
+          vagrant --version
+
+          # Try to unload KVM, but let VirtualBox/Vagrant be the final authority.
+          sudo modprobe -r kvm_intel 2>/dev/null || true
+          sudo modprobe -r kvm_amd 2>/dev/null || true
+          sudo modprobe -r kvm 2>/dev/null || true
+
           if lsmod | grep -q '^kvm'; then
-            sudo modprobe -r kvm_intel 2>/dev/null || true
-            sudo modprobe -r kvm_amd 2>/dev/null || true
-            sudo modprobe -r kvm 2>/dev/null || true
-          fi
-          if lsmod | grep -q '^kvm'; then
-            echo "KVM modules still loaded; VirtualBox will fail to start VMs."
-            lsmod | grep '^kvm' || true
-            exit 1
+            echo "::warning::KVM modules still loaded; continuing and letting VirtualBox/Vagrant decide."
+            lsmod | grep -E '^(kvm|vbox)' || true
           fi
 
       - name: Install requirements for Python and Ansible
@@ -99,6 +104,14 @@ jobs:
       - name: Run vagrant up (Debian + Ubuntu)
         run: vagrant up bookworm noble debian13
         # Initializes and provisions the Vagrant environment as defined in Vagrantfile
+
+      - name: Collect virtualization diagnostics on failure
+        if: failure()
+        run: |
+          set -euxo pipefail
+          lsmod | grep -E '^(kvm|vbox)' || true
+          vagrant status || true
+          VBoxManage list hostinfo || true
 
       - name: SSH into the box after boot
         run: |
