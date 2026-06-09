@@ -2,6 +2,9 @@
   "extends": [
     "config:recommended"
   ],
+  "schedule": [
+    "on the first day of the month"
+  ],
   "ansible-galaxy": {
     "managerFilePatterns": [
       "/(^|/)testing/requirements\\.ya?ml$/",
