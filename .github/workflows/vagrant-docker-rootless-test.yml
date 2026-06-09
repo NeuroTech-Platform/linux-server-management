@@ -9,7 +9,6 @@ on:
       - "requirements.txt"
       - "requirements.yml"
       - "testing/**"
-      - ".github/workflows/vagrant-docker-rootless-test.yml"
   workflow_dispatch: {}
 
 permissions:
