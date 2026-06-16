@@ -101,21 +101,21 @@ control_path_dir = ~/.ansible/cp
 #### Creating Encrypted Files
 ```bash
 # Create new encrypted file
-ansible-vault create group_vars/production/vault.yml
+ansible-vault create inventories/production/group_vars/all/vault.yml
 
 # Encrypt existing file
 ansible-vault encrypt sensitive_vars.yml
 
 # Edit encrypted file
-ansible-vault edit group_vars/production/vault.yml
+ansible-vault edit inventories/production/group_vars/all/vault.yml
 
 # Decrypt for viewing (avoid this in production)
-ansible-vault view group_vars/production/vault.yml
+ansible-vault view inventories/production/group_vars/all/vault.yml
 ```
 
 #### Vault File Structure
 ```yaml
-# group_vars/production/vault.yml (encrypted)
+# inventories/production/group_vars/all/vault.yml (encrypted)
 ---
 vault_database_password: "SecureDBPassword123!"
 vault_api_key: "sk-1234567890abcdef"
@@ -124,7 +124,7 @@ vault_ssl_private_key: |
   MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC...
   -----END PRIVATE KEY-----
 
-# group_vars/production/vars.yml (plain text)
+# inventories/production/group_vars/all/vars.yml (plain text)
 ---
 database_password: "{{ vault_database_password }}"
 api_key: "{{ vault_api_key }}"
@@ -482,7 +482,7 @@ rotate_database_password() {
     local new_password=$(openssl rand -base64 32)
     
     # Update password in vault
-    ansible-vault edit group_vars/production/vault.yml
+    ansible-vault edit inventories/production/group_vars/all/vault.yml
     
     # Apply to systems
     ansible-playbook -i production update-db-password.yml \
