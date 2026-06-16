@@ -12,10 +12,10 @@
 #   - Ansible 2.9+
 #   - Internet connectivity (for downloading hardening role)
 #   - SSH key access to target hosts
-#   - Variables defined in group_vars or host_vars
+#   - Variables defined under inventories/<env>/group_vars or inventories/<env>/host_vars
 #
 # Required Variables:
-#   - SSH_USERLIST: List of users to create (see group_vars examples)
+#   - SSH_USERLIST: List of users to create (see inventories/<env>/group_vars examples)
 #   - AUDITD_ACTION_MAIL_ACCT: Email address for audit alerts
 #   - MANAGE_UFW: Enable/disable UFW firewall management (true/false)
 #   - UFW_OUTGOING_TRAFFIC: List of allowed outbound traffic rules

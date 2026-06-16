@@ -15,23 +15,28 @@ This guide covers the organization and management of Ansible inventories for the
 
 ## Current Structure
 
-The project uses environment-based inventory organization with the following structure:
+The project uses environment-based inventory organization. Each inventory is
+self-contained under `inventories/<env>/`, with its own `inventory` file,
+`group_vars/`, and `host_vars/` directories. There are no top-level
+`group_vars/` or `host_vars/` directories.
 
 ```
-├── inventories/
-│   ├── production/             # Production environment
-│   │   └── inventory
-│   ├── staging/               # Staging environment
-│   │   └── inventory  
-│   └── development/           # Development environment
-│       └── inventory
-├── group_vars/
-│   ├── all.yml                # Global variables
-│   ├── dev/                   # Development environment
-│   │   └── vars.yml
-│   ├── bastion-servers/       # Bastion server group
-│   └── web-servers/           # Web server group
-└── host_vars/                 # Host-specific variables
+inventories/
+├── production/
+│   ├── inventory
+│   ├── group_vars/
+│   │   ├── all/vars.yml          # Defaults for this inventory
+│   │   └── bastion-servers/vars.yml
+│   └── host_vars/
+│       └── bastion-chorus/vars.yml
+├── staging/
+│   ├── inventory
+│   ├── group_vars/
+│   └── host_vars/
+└── testing/
+    ├── inventory
+    ├── group_vars/
+    └── host_vars/
 ```
 
 ## Inventory Organization
@@ -77,7 +82,7 @@ environment=production
 ```
 
 #### Development Environment
-Development configurations are managed through `group_vars/dev/` with appropriate inventory files.
+Development configurations are managed through `inventories/development/group_vars/dev/` with appropriate inventory files.
 
 ### Host Naming Conventions
 
@@ -92,11 +97,12 @@ Examples:
 
 ## Group Variables
 
-Group variables are organized by environment and function in the `group_vars/` directory.
+Group variables are organized by environment and function in the
+`inventories/<env>/group_vars/` directory.
 
-### Global Variables (`group_vars/all.yml`)
+### Inventory-Wide Defaults (`inventories/<env>/group_vars/all/vars.yml`)
 
-Contains variables that apply to all environments:
+Contains variables that apply to every host in the inventory:
 
 ```yaml
 ---
@@ -114,7 +120,7 @@ ssh_port: 22
 
 Each environment directory contains configuration specific to that environment:
 
-#### Development Environment (`group_vars/dev/vars.yml`)
+#### Development Environment (`inventories/development/group_vars/dev/vars.yml`)
 
 ```yaml
 ---
@@ -141,7 +147,7 @@ DISABLE_WIRELESS: false
 
 Variables for specific server functions:
 
-#### Bastion Servers (`group_vars/bastion-servers/`)
+#### Bastion Servers (`inventories/<env>/group_vars/bastion-servers/`)
 ```yaml
 ---
 # Bastion server specific configuration
@@ -153,7 +159,7 @@ SSHD_LOGIN_GRACE_TIME: 30
 AUDITD_ACTION_MAIL_ACCT: "admin@example.com"
 ```
 
-#### Web Servers (`group_vars/web-servers/`)
+#### Web Servers (`inventories/<env>/group_vars/web-servers/`)
 ```yaml
 ---
 # Web servers configuration
@@ -168,9 +174,10 @@ ssl_protocols: "TLSv1.2 TLSv1.3"
 
 ## Host Variables
 
-Host-specific variables are stored in the `host_vars/` directory, named after the hostname.
+Host-specific variables are stored in the `inventories/<env>/host_vars/`
+directory, in a subdirectory named after the hostname.
 
-### Example: `host_vars/web-prod-01.yml`
+### Example: `inventories/production/host_vars/web-prod-01/vars.yml`
 ```yaml
 ---
 # Host-specific configuration for web-prod-01
@@ -215,12 +222,12 @@ SSH_USERLIST:
 
 3. **Create environment variables**:
    ```bash
-   mkdir -p group_vars/new-environment
+   mkdir -p inventories/new-environment/group_vars/all
    ```
 
 4. **Configure environment variables**:
    ```yaml
-   # group_vars/new-environment/vars.yml
+   # inventories/new-environment/group_vars/all/vars.yml
    ---
    # Environment-specific configuration
    environment: new-environment
@@ -245,18 +252,18 @@ Ansible variable precedence (highest to lowest):
 4. Role and include vars
 5. Set_facts
 6. Registered vars
-7. **Host vars** (`host_vars/`)
-8. **Group vars** (`group_vars/`)
+7. **Host vars** (`inventories/<env>/host_vars/`)
+8. **Group vars** (`inventories/<env>/group_vars/`)
 9. Default vars
 
 #### Secure Variable Management
 ```yaml
-# group_vars/production/vault.yml (encrypted)
+# inventories/production/group_vars/all/vault.yml (encrypted)
 ---
 $ANSIBLE_VAULT;1.1;AES256
 66386439653634336465663...
 
-# group_vars/production/vars.yml (plain)
+# inventories/production/group_vars/all/vars.yml (plain)
 ---
 GENERALINITIALPASSWORD: "{{ vault_initial_password }}"
 database_password: "{{ vault_db_password }}"
@@ -274,7 +281,7 @@ database_password: "{{ vault_db_password }}"
 - **Use Ansible Vault**: Encrypt sensitive variables
 - **Environment separation**: Keep environment-specific variables separate
 - **Avoid hardcoding**: Use variables for all configurable values
-- **Default values**: Provide sensible defaults in group_vars/all.yml
+- **Default values**: Provide sensible defaults in `inventories/<env>/group_vars/all/vars.yml`
 
 ### 3. Security Practices
 - **SSH key management**: Store public keys in variables, never private keys
@@ -313,7 +320,7 @@ bastion_servers
 environment=staging
 ```
 
-#### 2. Environment Variables (`group_vars/staging/vars.yml`)
+#### 2. Environment Variables (`inventories/staging/group_vars/all/vars.yml`)
 ```yaml
 ---
 # Staging environment configuration
@@ -336,10 +343,10 @@ DISABLE_WIRELESS: true
 REBOOT_UBUNTU: false  # Prevent automatic reboots
 ```
 
-#### 3. Vault File (`group_vars/staging/vault.yml`)
+#### 3. Vault File (`inventories/staging/group_vars/all/vault.yml`)
 ```bash
 # Create encrypted vault
-ansible-vault create group_vars/staging/vault.yml
+ansible-vault create inventories/staging/group_vars/all/vault.yml
 
 # Content (when decrypted):
 ---

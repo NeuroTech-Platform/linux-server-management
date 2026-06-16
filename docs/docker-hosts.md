@@ -1,18 +1,19 @@
-## Host Variables Directory
+# Docker Host Configuration
 
-This directory contains Ansible host variables organized by individual host. Host variables are applied to specific hosts and take precedence over group variables in Ansible's variable precedence hierarchy.
+Configuration guidance for hosts that will run rootless Docker. These hosts
+require specific hardening adjustments to be compatible with Docker's
+requirements.
 
-For more information read [docs/inventory.md](docs/inventory.md)
-
-# Specific configurations for Docker Hosts
-
-## Overview
-
-Below is an example configuration for hosts that will run Docker rootless. These hosts require specific hardening adjustments to be compatible with Docker's requirements.
+Host-specific variables live under each inventory in
+`inventories/<env>/host_vars/<hostname>/vars.yml`. Group variables live under
+`inventories/<env>/group_vars/<group>/vars.yml`. See
+[inventory.md](inventory.md) for the overall layout and variable precedence
+rules.
 
 ## Example Configuration
 
-Create or update your host_vars file (e.g., `host_vars/your-docker-host/vars.yml`):
+Create or update your host vars file (e.g.
+`inventories/production/host_vars/your-docker-host/vars.yml`):
 
 ```yaml
 ---
@@ -42,7 +43,7 @@ LOGIND_HARDENING:
 
 # === SSH CONFIGURATION ===
 MANAGE_SSH: true
-SSHD_ADMIN_NET: 
+SSHD_ADMIN_NET:
   - "0.0.0.0/0"  # Adjust to your management network
 SSHD_MAX_AUTH_TRIES: 10
 SSHD_LOGIN_GRACE_TIME: 60
@@ -83,7 +84,7 @@ DOCKER_UNATTENDED_UPGRADES: true
 DOCKER_USER_BASHRC: true
 
 # === PACKAGE MANAGEMENT ===
-MANDATORY_PACKAGES: 
+MANDATORY_PACKAGES:
   - nano # this is your choice
   - ufw
   - git # this is your choice
@@ -92,7 +93,6 @@ MANDATORY_PACKAGES:
 
 # === AUDIT AND LOGGING ===
 AUDITD_ACTION_MAIL_ACCT: your-email@example.com
-
 ```
 
 ## Deployment Steps
@@ -100,9 +100,9 @@ AUDITD_ACTION_MAIL_ACCT: your-email@example.com
 ### 1. Create Host Vars File
 
 ```bash
-mkdir -p host_vars/your-docker-host
-cp host_vars/README-DOCKER-HOSTS.md host_vars/your-docker-host/vars.yml
-# Edit the file with your specific configuration
+mkdir -p inventories/production/host_vars/your-docker-host
+# Copy the example above into vars.yml and adjust for your host
+$EDITOR inventories/production/host_vars/your-docker-host/vars.yml
 ```
 
 ### 2. Add to Inventory
@@ -121,7 +121,7 @@ ansible-playbook -i inventories/production/inventory setup-playbook.yml \
 ```
 
 ### 4. Run Docker Installation
-Before that you will need to change you bash `$ANSIBLE_USER` to your actual user (instead of the bootstrap one), if needed.
+Before that you will need to change your bash `$ANSIBLE_USER` to your actual user (instead of the bootstrap one), if needed.
 ```bash
 ansible-playbook -i inventories/production/inventory install-docker-rootless.yml \
   --limit your-docker-host
@@ -206,11 +206,11 @@ POST_RUN_EXTRA_COMMANDS: |
   ufw allow in on flannel.1
   ufw allow in on cali+
   ufw allow in on vxlan.calico
-  
+
   # Kubernetes API
   ufw allow 6443/tcp
   ufw allow 16443/tcp
-  
+
   # Kubernetes pod networking
   ufw route allow in on cali+ out on vxlan.calico
   ufw route allow in on vxlan.calico out on cali+
@@ -223,4 +223,3 @@ POST_RUN_EXTRA_COMMANDS: |
 - [konstruktoid.docker_rootless Role](https://github.com/konstruktoid/ansible-role-docker-rootless)
 - [CIS Docker Benchmark](https://www.cisecurity.org/benchmark/docker)
 - [AppArmor Documentation](https://gitlab.com/apparmor/apparmor/-/wikis/Documentation)
-
