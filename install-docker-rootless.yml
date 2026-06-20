@@ -56,6 +56,25 @@
       become: true
       tags: [docker-setup, packages]
 
+    # konstruktoid.hardening v4.4.0+ sets kernel.unprivileged_userns_clone=0 and
+    # user.max_user_namespaces=0 (STIG V-257816) in /usr/lib/sysctl.d/zz-main-hardening.conf,
+    # which breaks rootless Docker. Must run BEFORE the role so its restart handler can
+    # bring docker.service up. The "zzz-" prefix wins alphanumerically against the hardening file
+    # so the override persists across reboots.
+    - name: Override hardening sysctls to keep user namespaces enabled for rootless Docker
+      ansible.posix.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        sysctl_set: true
+        sysctl_file: /etc/sysctl.d/zzz-docker-rootless-userns.conf
+        state: present
+        reload: true
+      loop:
+        - { name: kernel.unprivileged_userns_clone, value: "1" }
+        - { name: user.max_user_namespaces, value: "28633" }
+      become: true
+      tags: [docker-setup, sysctl]
+
     - name: Ensure Docker user exists before enabling lingering
       ansible.builtin.user:
         name: "{{ DOCKER_USER | default('dockeruser') }}"
