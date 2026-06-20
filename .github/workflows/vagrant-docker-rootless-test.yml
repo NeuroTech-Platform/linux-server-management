@@ -18,6 +18,10 @@ jobs:
   vagrant-docker-rootless:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        box: [noble, debian13]
     env:
       VAGRANT_DIR: ~/.vagrant.d/boxes
       TEST_PLAYBOOK: testing/e2e-hardened-then-install-docker-rootless.yml
@@ -82,14 +86,14 @@ jobs:
           ansible-galaxy install -r requirements.yml
           ansible-galaxy install --no-deps -r testing/requirements.yml
 
-      - name: Run Vagrant integration test (Ubuntu Noble)
+      - name: Run Vagrant integration test (${{ matrix.box }})
         run: |
           set -euxo pipefail
-          vagrant up noble
+          vagrant up ${{ matrix.box }}
 
           # Double-check rootless Docker works from inside the VM.
           # Avoid quoting pitfalls: resolve uid/home first, then run as dockeruser with explicit env.
-          vagrant ssh noble -c 'set -euo pipefail
+          vagrant ssh ${{ matrix.box }} -c 'set -euo pipefail
             uid="$(id -u dockeruser)"
             home="$(getent passwd dockeruser | cut -d: -f6)"
             sudo -u dockeruser env \
@@ -102,5 +106,5 @@ jobs:
       - name: Clean up Vagrant session
         if: always()
         run: |
-          vagrant halt noble || true
-          vagrant destroy -f noble || true
+          vagrant halt ${{ matrix.box }} || true
+          vagrant destroy -f ${{ matrix.box }} || true

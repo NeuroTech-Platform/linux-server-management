@@ -13,6 +13,10 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        box: [noble, debian13]
     env:
       TEST_PLAYBOOK: testing/e2e-hardened-then-install-docker-rootless.yml
 
@@ -43,18 +47,18 @@ jobs:
           ansible-galaxy install -r requirements.yml
           ansible-galaxy install --no-deps -r testing/requirements.yml
 
-      - name: Run Vagrant integration test (Ubuntu Noble, ARM64)
+      - name: Run Vagrant integration test (${{ matrix.box }}, ARM64)
         run: |
           set -euxo pipefail
           # Ensure Vagrant uses the venv ansible-playbook.
           export PATH="$PWD/.venv/bin:$PATH"
           export TEST_PLAYBOOK="${TEST_PLAYBOOK}"
 
-          vagrant destroy -f noble || true
-          vagrant up noble
+          vagrant destroy -f ${{ matrix.box }} || true
+          vagrant up ${{ matrix.box }}
 
           # Sanity check: rootless docker socket works from inside the VM.
-          vagrant ssh noble -c 'set -euo pipefail
+          vagrant ssh ${{ matrix.box }} -c 'set -euo pipefail
             uid="$(id -u dockeruser)"
             sudo -u dockeruser XDG_RUNTIME_DIR="/run/user/${uid}" DOCKER_HOST="unix:///run/user/${uid}/docker.sock" bash -lc "docker --version && docker info >/dev/null"
           '
@@ -62,6 +66,6 @@ jobs:
       - name: Clean up Vagrant session
         if: always()
         run: |
-          vagrant halt noble || true
-          vagrant destroy -f noble || true
+          vagrant halt ${{ matrix.box }} || true
+          vagrant destroy -f ${{ matrix.box }} || true
 
