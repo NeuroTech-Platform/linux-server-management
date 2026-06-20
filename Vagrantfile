@@ -19,63 +19,6 @@ Vagrant.configure("2") do |config|
     vb.customize ["modifyvm", :id, "--uartmode1", "disconnected"]
   end
 
-  config.vm.define "bookworm_vlan" do |bookworm_vlan|
-    bookworm_vlan.vm.box = "debian/bookworm64"
-    bookworm_vlan.ssh.insert_key = true
-    bookworm_vlan.vm.hostname = "bookworm-vlan"
-    bookworm_vlan.vm.boot_timeout = 600
-    if Vagrant.has_plugin?("vagrant-vbguest")
-      bookworm_vlan.vbguest.auto_update = false
-    end
-    bookworm_vlan.vm.provision "shell",
-      inline: "ip link set dev eth0 down; ip link set eth0 name eth0.101; ip link set dev eth0.101 up; dhclient -r eth0.101; dhclient eth0.101",
-      upload_path: "/var/tmp/vagrant-shell"
-    bookworm_vlan.vm.provision "shell",
-      inline: "apt-get update && apt-get remove -y dkms && apt-get -y install dkms && DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-apt curl zstd",
-      upload_path: "/var/tmp/vagrant-shell"
-    bookworm_vlan.vm.provision "ansible" do |a|
-      a.verbose = "v"
-      a.limit = "all"
-      a.playbook = test_playbook
-      a.extra_vars = {
-        "ansible_become_pass" => "vagrant",
-        "ansible_python_interpreter" => "/usr/bin/python3",
-        "sshd_admin_net" => ["0.0.0.0/0"],
-        "sshd_allow_groups" => ["vagrant", "sudo", "debian", "ubuntu"],
-        "system_upgrade" => "false",
-        "manage_aide" => "false"
-      }
-    end
-  end
-
-  config.vm.define "bookworm" do |bookworm|
-    bookworm.vm.box = "debian/bookworm64"
-    if Vagrant.has_plugin?("vagrant-disksize")
-      bookworm.disksize.size = '25GB'
-    end
-    bookworm.ssh.insert_key = true
-    bookworm.vm.hostname = "bookworm"
-    bookworm.vm.boot_timeout = 600
-    if Vagrant.has_plugin?("vagrant-vbguest")
-      bookworm.vbguest.auto_update = false
-    end
-    bookworm.vm.provision "shell",
-      inline: "apt-get update && apt-get remove -y dkms && apt-get -y install dkms && DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-apt curl zstd",
-      upload_path: "/var/tmp/vagrant-shell"
-    bookworm.vm.provision "ansible" do |a|
-      a.verbose = "v"
-      a.limit = "all"
-      a.playbook = test_playbook
-      a.extra_vars = {
-        "ansible_become_pass" => "vagrant",
-        "ansible_python_interpreter" => "/usr/bin/python3",
-        "sshd_admin_net" => ["0.0.0.0/0"],
-        "sshd_allow_groups" => ["vagrant", "sudo", "debian", "ubuntu"],
-        "system_upgrade" => "false",
-     }
-    end
-  end
-
   config.vm.define "noble" do |noble|
     noble.vm.box = "bento/ubuntu-24.04"
     noble.ssh.insert_key = true
