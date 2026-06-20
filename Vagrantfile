@@ -24,6 +24,9 @@ Vagrant.configure("2") do |config|
     noble.ssh.insert_key = true
     noble.vm.hostname = "noble"
     noble.vm.boot_timeout = 600
+    if Vagrant.has_plugin?("vagrant-vbguest")
+      noble.vbguest.auto_update = false
+    end
     noble.vm.provision "shell",
       inline: "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-apt curl zstd",
       upload_path: "/var/tmp/vagrant-shell"
