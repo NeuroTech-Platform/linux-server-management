@@ -20,7 +20,7 @@ Vagrant.configure("2") do |config|
   end
 
   config.vm.define "noble" do |noble|
-    noble.vm.box = "bento/ubuntu-24.04"
+    noble.vm.box = "cloud-image/ubuntu-24.04"
     noble.ssh.insert_key = true
     noble.vm.hostname = "noble"
     noble.vm.boot_timeout = 600
