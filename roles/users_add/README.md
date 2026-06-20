@@ -150,7 +150,7 @@ ansible-galaxy collection install ansible.posix
 
 ### Integration with Group Variables
 ```yaml
-# group_vars/production/users.yml
+# inventories/production/group_vars/all/users.yml
 users_add_userlist:
   - username: "admin1"
     public_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC..."
@@ -160,7 +160,7 @@ users_add_userlist:
     admin: false
     non_admin_allowed_commands: "NOPASSWD: /usr/bin/git, /usr/bin/docker"
 
-# group_vars/production/vault.yml (encrypted)
+# inventories/production/group_vars/all/vault.yml (encrypted)
 GENERALINITIALPASSWORD: !vault |
   $ANSIBLE_VAULT;1.1;AES256
   66386...

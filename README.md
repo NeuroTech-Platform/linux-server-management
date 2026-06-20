@@ -92,7 +92,7 @@ Manages user accounts with the following features:
 
 **Example Configuration**:
 ```yaml
-# group_vars/your-environment/vars.yml
+# inventories/your-environment/group_vars/all/vars.yml
 SSH_USERLIST:
   - username: "admin_user"
     admin: true
@@ -122,7 +122,7 @@ SSHD_ADMIN_NET:
 Create or modify inventory files in the `inventories/` directory based on your environment.
 
 ### 2. Configure variables
-Edit the appropriate files in `group_vars/` and `host_vars/` for your environment-specific settings.
+Edit the appropriate files under `inventories/<env>/group_vars/` and `inventories/<env>/host_vars/` for your environment-specific settings.
 See the example configurations in `docs/inventory.md` for detailed guidance on setting up your environment.
 
 ### 3. Run a playbook
@@ -209,10 +209,10 @@ The Docker rootless integration test is intentionally end-to-end: it assumes the
 ### Using Ansible Vault
 ```bash
 # Create encrypted variable file
-ansible-vault create group_vars/all/vault.yml
+ansible-vault create inventories/your-environment/group_vars/all/vault.yml
 
 # Edit encrypted file
-ansible-vault edit group_vars/all/vault.yml
+ansible-vault edit inventories/your-environment/group_vars/all/vault.yml
 
 # Run playbook with vault
 ansible-playbook -i inventory playbook.yml --ask-vault-pass
