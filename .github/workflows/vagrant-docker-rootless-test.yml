@@ -18,6 +18,10 @@ jobs:
   vagrant-docker-rootless:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        box: [noble, debian13]
     env:
       VAGRANT_DIR: ~/.vagrant.d/boxes
       TEST_PLAYBOOK: testing/e2e-hardened-then-install-docker-rootless.yml
@@ -63,16 +67,22 @@ jobs:
       - name: Disable KVM to allow VirtualBox
         run: |
           set -euxo pipefail
-          # GitHub-hosted runners often have KVM modules loaded, which prevents VirtualBox from using VT-x/AMD-V.
+          echo "ImageOS=${ImageOS:-unknown}"
+          echo "ImageVersion=${ImageVersion:-unknown}"
+          uname -a
+          lsmod | grep -E '^(kvm|vbox)' || true
+          VBoxManage --version
+          vagrant --version
+
+          # Try to unload KVM, but let VirtualBox/Vagrant be the final authority.
+          # Modern VirtualBox can run alongside KVM; if it can't, the vagrant up step will surface that.
+          sudo modprobe -r kvm_intel 2>/dev/null || true
+          sudo modprobe -r kvm_amd 2>/dev/null || true
+          sudo modprobe -r kvm 2>/dev/null || true
+
           if lsmod | grep -q '^kvm'; then
-            sudo modprobe -r kvm_intel 2>/dev/null || true
-            sudo modprobe -r kvm_amd 2>/dev/null || true
-            sudo modprobe -r kvm 2>/dev/null || true
-          fi
-          if lsmod | grep -q '^kvm'; then
-            echo "KVM modules still loaded; VirtualBox will fail to start VMs."
-            lsmod | grep '^kvm' || true
-            exit 1
+            echo "::warning::KVM modules still loaded; continuing and letting VirtualBox/Vagrant decide."
+            lsmod | grep -E '^(kvm|vbox)' || true
           fi
 
       - name: Install Python + Ansible deps
@@ -82,14 +92,14 @@ jobs:
           ansible-galaxy install -r requirements.yml
           ansible-galaxy install --no-deps -r testing/requirements.yml
 
-      - name: Run Vagrant integration test (Ubuntu Noble)
+      - name: Run Vagrant integration test (${{ matrix.box }})
         run: |
           set -euxo pipefail
-          vagrant up noble
+          vagrant up ${{ matrix.box }}
 
           # Double-check rootless Docker works from inside the VM.
           # Avoid quoting pitfalls: resolve uid/home first, then run as dockeruser with explicit env.
-          vagrant ssh noble -c 'set -euo pipefail
+          vagrant ssh ${{ matrix.box }} -c 'set -euo pipefail
             uid="$(id -u dockeruser)"
             home="$(getent passwd dockeruser | cut -d: -f6)"
             sudo -u dockeruser env \
@@ -102,5 +112,5 @@ jobs:
       - name: Clean up Vagrant session
         if: always()
         run: |
-          vagrant halt noble || true
-          vagrant destroy -f noble || true
+          vagrant halt ${{ matrix.box }} || true
+          vagrant destroy -f ${{ matrix.box }} || true

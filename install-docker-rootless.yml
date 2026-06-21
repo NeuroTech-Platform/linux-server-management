@@ -9,7 +9,7 @@
 # 4. Enabling Docker services for specified users without root privileges
 #
 # Requirements:
-#   - Target systems: Ubuntu 20.04+, Debian 10+
+#   - Target systems: Ubuntu 24.04+, Debian 13+
 #   - Ansible 2.9+
 #   - Internet connectivity (for downloading Docker and role)
 #   - User account already created (run setup-playbook.yml first)
@@ -118,7 +118,7 @@
       ansible.builtin.git:
         repo: https://github.com/konstruktoid/ansible-role-docker-rootless.git
         dest: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.docker_rootless"
-        version: 'e8d6018d01b5ac241fd823ed7ccd6f540eece3db'  # v1.14.0
+        version: '82eceb74b8c62a082f7107c0460df3fee32768bf'  # v1.23.0
       delegate_to: localhost
       run_once: true
       tags: [docker-setup, role-download]

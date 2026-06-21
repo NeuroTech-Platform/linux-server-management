@@ -407,3 +407,6 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode
 
 # End of https://www.toptal.com/developers/gitignore/api/ansible,windows,osx,linux,vagrant,python,pycharm+all,cmake
+
+# Local scratch / test artifacts
+tmp/

@@ -39,7 +39,7 @@ This role creates and manages user accounts on Linux systems with the following 
 ## Requirements
 
 - **Ansible Version**: 2.9 or higher
-- **Target Systems**: Ubuntu 20.04+, Debian 10+
+- **Target Systems**: Ubuntu 24.04+, Debian 13+
 - **Collections**: 
   - `ansible.builtin` (included with Ansible)
   - `ansible.posix` (install via `ansible-galaxy collection install ansible.posix`)
