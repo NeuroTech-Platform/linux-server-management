@@ -5,9 +5,9 @@
 # The ansible/ansible-lint GitHub Action can install dependencies from a single
 # requirements file via its `requirements_file` input.
 #
-# Keep this file in sync with:
-# - /Users/flow/linux-server-management/requirements.yml (collections)
-# - /Users/flow/linux-server-management/testing/requirements.yml (roles)
+# This file combines the collections from requirements.yml and the roles from
+# testing/requirements.yml. Renovate scans all three files (see renovate.json),
+# so a version bump updates them together in one PR — no manual syncing needed.
 collections:
   - name: ansible.posix
     version: 2.1.0
