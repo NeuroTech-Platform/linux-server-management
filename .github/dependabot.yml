@@ -4,8 +4,13 @@ updates:
     directory: /
     schedule:
       interval: monthly
-
-  - package-ecosystem: docker
-    directory: /action-lint
-    schedule:
-      interval: monthly
+    # Supply-chain delay: don't surface (or auto-merge) a release until it has
+    # survived in the wild for a week, so a yanked/compromised tag isn't merged
+    # within hours of publication. Security updates ignore the cooldown.
+    cooldown:
+      default-days: 7
+    # Collapse all Action bumps into a single PR instead of one per action.
+    groups:
+      github-actions:
+        patterns:
+          - "*"

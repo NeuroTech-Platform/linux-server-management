@@ -1,0 +1,39 @@
+name: "deps: dependabot auto-merge"
+
+# Enables GitHub's native auto-merge for low-risk Dependabot PRs (GitHub Actions
+# patch/minor). Auto-merge only completes once the required status checks pass,
+# so the lint + integration tests remain the real gate. Major bumps fall through
+# to manual review.
+#
+# Prerequisites (repo settings, one-time):
+#   - Settings -> General -> "Allow auto-merge" enabled
+#   - A branch protection rule on main requiring the CI checks to pass
+
+on:
+  pull_request_target:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
+        with:
+          egress-policy: audit
+
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a # v2.5.0
+
+      - name: Enable auto-merge for patch and minor updates
+        if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

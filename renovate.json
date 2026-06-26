@@ -5,10 +5,45 @@
   "schedule": [
     "on the first day of the month"
   ],
+  "enabledManagers": [
+    "ansible-galaxy"
+  ],
+  "minimumReleaseAge": "7 days",
+  "osvVulnerabilityAlerts": true,
   "ansible-galaxy": {
     "managerFilePatterns": [
-      "/(^|/)testing/requirements\\.ya?ml$/",
+      "/(^|/)requirements\\.ya?ml$/",
       "/(^|/)requirements-lint\\.ya?ml$/"
     ]
-  }
+  },
+  "packageRules": [
+    {
+      "description": "Group the pinned Ansible collections into one PR and auto-merge patch/minor once CI is green; majors stay manual. requirements.yml is matched above so these bumps run the full integration test.",
+      "matchManagers": [
+        "ansible-galaxy"
+      ],
+      "matchPackageNames": [
+        "ansible.posix",
+        "community.general",
+        "community.crypto"
+      ],
+      "groupName": "ansible collections",
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "konstruktoid roles change the hardening surface: keep them as individual, human-reviewed PRs (no auto-merge). Per-role PR titles are also required by deps-new-version-test.yml, which greps the title to pick the test playbook and rewrite the pinned SHA.",
+      "matchManagers": [
+        "ansible-galaxy"
+      ],
+      "matchPackageNames": [
+        "konstruktoid.hardening",
+        "konstruktoid.docker_rootless"
+      ],
+      "automerge": false
+    }
+  ]
 }
