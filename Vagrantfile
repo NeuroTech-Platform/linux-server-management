@@ -40,6 +40,9 @@ Vagrant.configure("2") do |config|
         "sshd_admin_net" => ["0.0.0.0/0"],
         "sshd_allow_groups" => ["vagrant", "sudo", "ubuntu"],
         "ansible_python_interpreter" => "/usr/bin/python3",
+        # AIDE init is slow; only exercise it when asked (CI enables it for
+        # konstruktoid version bumps). Defaults off for fast local/dep runs.
+        "manage_aide" => ENV.fetch("MANAGE_AIDE", "false") == "true",
       }
      end
    end
