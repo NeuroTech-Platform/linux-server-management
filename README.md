@@ -21,20 +21,43 @@ This repository provides a collection of Ansible playbooks and roles designed to
 
 ## Prerequisites
 
-### Debian-based Linux
+You run these playbooks from a **control machine** (your laptop) against remote
+servers over SSH. The only hard requirements are `git`, Python 3, and Ansible
+(installed in the next section). VirtualBox + Vagrant are **only** needed if you
+want to run the local VM test suite — skip them if you're provisioning real hosts.
+
+### To provision servers (required)
+
+#### Debian-based Linux
 ```bash
 sudo apt update
-sudo apt install virtualbox vagrant python3-pip
+sudo apt install git python3 python3-venv
 ```
 
-### macOS
+#### macOS
 ```bash
-brew install python
-python3 -m ensurepip --upgrade
-# Vagrant (HashiCorp tap)
-brew install hashicorp/tap/hashicorp-vagrant
+brew install git python
+```
 
+> Note: On modern macOS (Homebrew Python) and Debian 12+/13, Python is
+> "externally managed" (PEP 668), so a global `pip install` is blocked. The
+> Installation section below uses a virtual environment, which is the supported
+> path on every platform. Ansible itself is installed there — not via the OS
+> package manager.
+
+### To run local VM tests (optional)
+
+Only needed for the [Testing](#testing) section.
+
+#### Debian-based Linux
+```bash
+sudo apt install virtualbox vagrant
+```
+
+#### macOS
+```bash
 brew install --cask virtualbox
+brew install hashicorp/tap/hashicorp-vagrant
 ```
 
 ## Installation
@@ -45,15 +68,23 @@ brew install --cask virtualbox
    cd linux-server-management
    ```
 
-2. **Install Python dependencies**:
+2. **Create a virtual environment and install Python dependencies**
+   (installs Ansible, ansible-lint, passlib, jmespath):
    ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate        # run this in every new shell before using ansible
    pip install -r requirements.txt
    ```
 
-3. **Install Ansible dependencies**:
+3. **Install Ansible dependencies** (collections; the playbook also pulls the
+   hardening role automatically at runtime):
    ```bash
    ansible-galaxy install -r requirements.yml
    ```
+
+> The `.venv` must be active (`source .venv/bin/activate`) whenever you run
+> `ansible`, `ansible-playbook`, or `ansible-galaxy`. On macOS use `pip` /
+> `python3` from inside the venv (a bare `pip` may not exist system-wide).
 
 ## Available Playbooks
 
@@ -87,7 +118,7 @@ Manages user accounts with the following features:
 - `AUDITD_ACTION_MAIL_ACCT`: Email address for audit system alerts
 - `MANAGE_UFW`: Enable/disable UFW firewall management (true/false)  
 - `UFW_OUTGOING_TRAFFIC`: List of allowed outbound traffic rules
-- `REBOOT_UBUNTU`: Allow automatic reboots for updates (true/false)
+- `AUTO_UPDATES_OPTIONS`: Automatic-updates policy; its `reboot` key (bool) is required by pre-flight
 - `SSHD_ADMIN_NET`: List of networks allowed for SSH admin access
 
 **Example Configuration**:
@@ -105,10 +136,19 @@ UFW_OUTGOING_TRAFFIC:
   - "80/tcp"    # HTTP
   - "443/tcp"   # HTTPS
   - "53"        # DNS
-REBOOT_UBUNTU: false
+AUTO_UPDATES_OPTIONS:
+  enabled: true
+  only_security: true
+  reboot: false              # required by pre-flight (must be a boolean)
+  reboot_from_time: "02:00"
+  reboot_time_margin_mins: 20
 SSHD_ADMIN_NET:
   - "192.168.1.0/24"
   - "10.0.0.0/8"
+
+# Disable client-side DNSSEC if your network breaks resolution after hardening
+# (see Troubleshooting). Validation still happens at the upstream resolvers.
+# DNSSEC: false
 
 # Optional security overrides (defaults shown)
 # SSHD_MAX_AUTH_TRIES: 3        # CIS compliant (default)
@@ -119,29 +159,68 @@ SSHD_ADMIN_NET:
 ## Quick Start
 
 ### 1. Set up your inventory
-Create or modify inventory files in the `inventories/` directory based on your environment.
+Create your own inventory under `inventories/<your-env>/` — an `inventory` file
+plus `host_vars/` (and optionally `group_vars/`).
+
+> **Inventories are gitignored by design** (see the top of `.gitignore`): they
+> contain environment-specific IPs, usernames and secrets, so the repository
+> ships **no** inventories — a fresh clone has none. Maintain yours locally or in
+> a private repo. Use `docs/inventory.md` and the example configuration above
+> (the `users_add` variables block) as your template.
 
 ### 2. Configure variables
-Edit the appropriate files under `inventories/<env>/group_vars/` and `inventories/<env>/host_vars/` for your environment-specific settings.
-See the example configurations in `docs/inventory.md` for detailed guidance on setting up your environment.
+Define your host/group variables under `inventories/<your-env>/host_vars/` and
+`inventories/<your-env>/group_vars/`. See `docs/inventory.md` for a full walkthrough.
 
-### 3. Run a playbook
+`setup-playbook.yml` runs a pre-flight check and **fails immediately** unless all
+of these are defined for the target host: `SSH_USERLIST`,
+`AUDITD_ACTION_MAIL_ACCT`, `MANAGE_UFW`, `UFW_OUTGOING_TRAFFIC`,
+`AUTO_UPDATES_OPTIONS.reboot`, `SSHD_ADMIN_NET`, and `ENABLE_2FA` (required even
+when `false`). Define every one of them for each host you target.
+
+### 3. Provision a brand-new server (first run, as `root`)
+
+A freshly created server usually only has the `root` account — and this playbook
+is what *creates* your unprivileged users. So the **first** run must connect as
+`root`. The same run also hardens the box and, when `DISABLE_ROOT_ACCOUNT: true`,
+**disables root SSH and password authentication at the end** — so this is a
+one-time bootstrap. Order matters.
+
 ```bash
-# Set your SSH username
-ANSIBLE_USER="your_username"
+source .venv/bin/activate                 # if not already active
 
-# The below assumes that you ran ssh-add so that you won't be prompted countless time for your ssh key password.
+# 1. Accept the new host's SSH fingerprint (host key checking is enforced).
+#    A brand-new host has never been seen, so connect once manually first:
+ssh -o StrictHostKeyChecking=accept-new root@<server-ip> true
 
-# Run the setup playbook
-ansible-playbook -i inventories/your-inventory/inventory \
-                 -l target_group_or_host \
-                 -u $ANSIBLE_USER \
+# 2. (Optional) Smoke-test connectivity through Ansible:
+ansible -i inventories/<your-env>/inventory <your-host> -u root -m ping
+
+# 3. First run — connect as root. No -K needed: root has no sudo password.
+ansible-playbook -i inventories/<your-env>/inventory \
+                 -l <your-host> \
+                 -u root \
                  setup-playbook.yml
+```
 
-# Add -K flag if sudo password is required
-ansible-playbook -i inventories/your-inventory/inventory \
-                 -l target_group_or_host \
-                 -u $ANSIBLE_USER \
+This creates the users in `SSH_USERLIST`, applies CIS hardening, and locks down
+SSH. New users are forced to change their password on first login.
+
+> If `root` only accepts a password (not your key), copy your key up first with
+> `ssh-copy-id root@<server-ip>`, or add `--ask-pass` (requires `sshpass`).
+
+### 4. Subsequent runs (as your admin user)
+
+After the bootstrap, `root` login is gone. Connect as one of the admin users you
+just created, and add `-K` so Ansible can prompt for the sudo password:
+
+```bash
+ANSIBLE_USER="your_admin_user"
+
+# ssh-add your key first to avoid repeated passphrase prompts.
+ansible-playbook -i inventories/<your-env>/inventory \
+                 -l <your-host> \
+                 -u "$ANSIBLE_USER" \
                  -K \
                  setup-playbook.yml
 ```
@@ -206,6 +285,12 @@ The Docker rootless integration test is intentionally end-to-end: it assumes the
   To verify: run `docker info | grep -i cgroup` as the rootless Docker user.
   If you need cgroup enforcement in rootless mode and your system supports it, remove that override and restart the user service (`systemctl --user restart docker`). For example arm64 Ubuntu 26.04.
 
+- **systemd-resolved DNSSEC**: the hardening role defaults to `DNSSEC=allow-downgrade`.
+  On networks where upstream answers fail validation (`no-signature`, common with
+  CDN/CNAME-backed mirrors such as `deb.debian.org`), this breaks DNS and `apt`
+  partway through a run. Override per host/group with `DNSSEC: false` — see the
+  Troubleshooting entry above.
+
 ### Using Ansible Vault
 ```bash
 # Create encrypted variable file
@@ -231,6 +316,29 @@ ansible-playbook -i inventory playbook.yml --ask-vault-pass
 - Add `-K` flag to prompt for sudo password
 - Verify user has sudo permissions on target system
 - Check `/etc/sudoers.d/` for user-specific rules
+
+**`root@host: Permission denied (publickey)` after a successful run**
+- Expected. With `DISABLE_ROOT_ACCOUNT: true`, the first run disables root SSH.
+  Reconnect as one of the admin users from `SSH_USERLIST` (see Quick Start step 4).
+
+**Pre-flight fails: `Missing required variables` / `ENABLE_2FA is defined` evaluated to false**
+- The target host is missing one of the mandatory variables. Define all of them
+  (see Quick Start step 2); `ENABLE_2FA` is required even when set to `false`.
+
+**`externally-managed-environment` when running `pip install`**
+- You're installing into the system Python (PEP 668). Use the virtual environment
+  from the Installation section: `python3 -m venv .venv && source .venv/bin/activate`.
+
+**DNS / `apt` breaks midway through hardening (`Temporary failure resolving ...`)**
+- The hardening role configures `systemd-resolved` with `DNSSEC=allow-downgrade`,
+  which on some networks rejects valid answers (`DNSSEC validation failed:
+  no-signature`) and breaks all name resolution — failing later `apt` tasks.
+- Diagnose on the host: `resolvectl query deb.debian.org` (look for a DNSSEC error)
+  and `resolvectl status | grep -i dnssec`.
+- Fix: set `DNSSEC: false` in your host/group vars.
+  `setup-playbook.yml` exposes `DNSSEC` and `DNS_OVER_TLS` as overridable variables.
+  Validation is still performed by the upstream resolvers (`1.1.1.2`/`9.9.9.9`) and
+  the channel is protected by DNS-over-TLS, so this is a safe, common posture.
 
 **Ansible Galaxy Dependencies**
 Run `ansible-galaxy install -r requirements.yml --force` to update roles

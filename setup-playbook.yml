@@ -168,6 +168,17 @@
         manage_ufw: "{{ MANAGE_UFW }}"                            # Enable/disable UFW management
         disable_wireless: "{{ DISABLE_WIRELESS | default(true) }}"               # Disable wireless interfaces
 
+        # === DNS RESOLVER (systemd-resolved) ===
+        # Exposed so operators on networks where DNSSEC validation fails
+        # ("DNSSEC validation failed: no-signature", common with CDN/CNAME
+        # mirrors like deb.debian.org) can override per inventory.
+        # The hardening role's arg spec accepts only: the string 'allow-downgrade'
+        # or a YAML boolean (true/false) -- NOT the string "false". So set e.g.
+        #   DNSSEC: false
+        # in host_vars/group_vars. Defaults match the konstruktoid.hardening role.
+        dnssec: "{{ DNSSEC | default('allow-downgrade') }}"            # allow-downgrade | true | false
+        dns_over_tls: "{{ DNS_OVER_TLS | default('opportunistic') }}"  # opportunistic | true | false
+
         # === SSH CONFIGURATION ===
         manage_ssh: "{{ MANAGE_SSH | default(true) }}"                               # Enable SSH hardening
         sshd_admin_net: "{{ SSHD_ADMIN_NET }}"                                      # Networks allowed for SSH admin access
