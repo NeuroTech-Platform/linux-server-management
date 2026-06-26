@@ -19,18 +19,20 @@ Vagrant.configure("2") do |config|
     vb.customize ["modifyvm", :id, "--uartmode1", "disconnected"]
   end
 
-  config.vm.define "noble" do |noble|
-    noble.vm.box = "cloud-image/ubuntu-24.04"
-    noble.ssh.insert_key = true
-    noble.vm.hostname = "noble"
-    noble.vm.boot_timeout = 600
+  # Version-agnostic label: bumping to a future Ubuntu LTS only touches the
+  # box line below, never the CI workflows that run `vagrant up ubuntu ...`.
+  config.vm.define "ubuntu" do |ubuntu|
+    ubuntu.vm.box = "cloud-image/ubuntu-26.04"
+    ubuntu.ssh.insert_key = true
+    ubuntu.vm.hostname = "ubuntu"
+    ubuntu.vm.boot_timeout = 600
     if Vagrant.has_plugin?("vagrant-vbguest")
-      noble.vbguest.auto_update = false
+      ubuntu.vbguest.auto_update = false
     end
-    noble.vm.provision "shell",
+    ubuntu.vm.provision "shell",
       inline: "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-apt curl zstd",
       upload_path: "/var/tmp/vagrant-shell"
-    noble.vm.provision "ansible" do |a|
+    ubuntu.vm.provision "ansible" do |a|
       a.verbose = "v"
       a.limit = "all"
       a.playbook = test_playbook

@@ -9,7 +9,7 @@
 # 4. Enabling Docker services for specified users without root privileges
 #
 # Requirements:
-#   - Target systems: Ubuntu 24.04+, Debian 13+
+#   - Target systems: Ubuntu 26.04+, Debian 13+
 #   - Ansible 2.9+
 #   - Internet connectivity (for downloading Docker and role)
 #   - User account already created (run setup-playbook.yml first)
