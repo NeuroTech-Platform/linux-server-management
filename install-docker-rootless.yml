@@ -180,6 +180,10 @@
       notify: Restart rootless docker
       tags: [docker-config]
 
+    - name: Apply daemon.json before the smoke test (restart rootless docker now)
+      ansible.builtin.meta: flush_handlers
+      tags: [docker-config]
+
     - name: Check Docker version for rootless user
       ansible.builtin.shell: "export PATH=$HOME/bin:$HOME/.local/bin:$PATH && export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock && docker --version"
       register: docker_version_check
