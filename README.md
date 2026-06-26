@@ -16,8 +16,8 @@ This repository provides a collection of Ansible playbooks and roles designed to
 ## Supported Systems
 
 - **Debian**: Trixie (13) and newer
-- **Ubuntu**: Noble (24.04 LTS) and newer
-- **Architecture**: x86_64 and aarch64 (arm64 - only Ubuntu 24.04 tested)
+- **Ubuntu**: Resolute Raccoon (26.04 LTS) and newer
+- **Architecture**: x86_64 and aarch64 (arm64 - only Ubuntu 26.04 tested)
 
 ## Prerequisites
 
@@ -169,7 +169,7 @@ export TEST_PLAYBOOK=testing/e2e-hardened-then-install-docker-rootless.yml
 # export TEST_PLAYBOOK=testing/test-new-version-hardening.yml
 # export TEST_PLAYBOOK=testing/test-new-version-docker-rootless.yml
 
-# Start and provision test VMs (Debian 13, Ubuntu 24.04)
+# Start and provision test VMs (Debian 13, Ubuntu 26.04)
 PATH="$PWD/.venv/bin:$PATH" vagrant up
 ```
 
@@ -204,7 +204,7 @@ The Docker rootless integration test is intentionally end-to-end: it assumes the
 - **Rootless Docker cgroups**: if Docker reports `Cgroup Driver: none` in rootless mode, resource limits (`--memory`, `--cpus`, `--pids-limit`) are not enforced.
   This repo currently writes `/home/dockeruser/.config/docker/daemon.json` to force `native.cgroupdriver=cgroupfs` as a workaround in some environments, which can cause cgroups to be effectively disabled in others.
   To verify: run `docker info | grep -i cgroup` as the rootless Docker user.
-  If you need cgroup enforcement in rootless mode and your system supports it, remove that override and restart the user service (`systemctl --user restart docker`). For example arm64 Ubuntu 24.04.
+  If you need cgroup enforcement in rootless mode and your system supports it, remove that override and restart the user service (`systemctl --user restart docker`). For example arm64 Ubuntu 26.04.
 
 ### Using Ansible Vault
 ```bash
