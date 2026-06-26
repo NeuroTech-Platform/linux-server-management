@@ -91,7 +91,7 @@ jobs:
           ansible-galaxy install -r requirements.yml
           ansible-galaxy install --no-deps -r testing/requirements.yml
 
-      - name: Select role test playbook
+      - name: Select role test playbook and AIDE coverage
         run: |
           TITLE="${{ github.event.pull_request.title }}"
           if echo "$TITLE" | grep -qi "dependency konstruktoid.docker_rootless"; then
@@ -99,9 +99,17 @@ jobs:
           else
             echo "TEST_PLAYBOOK=testing/test-new-version-hardening.yml" >> "$GITHUB_ENV"
           fi
+          # AIDE init is expensive and its tasks only change when the hardening
+          # role version changes. Run it only for konstruktoid.hardening bumps;
+          # skip it for the frequent collection/other dependency PRs.
+          if echo "$TITLE" | grep -qi "dependency konstruktoid.hardening"; then
+            echo "MANAGE_AIDE=true" >> "$GITHUB_ENV"
+          else
+            echo "MANAGE_AIDE=false" >> "$GITHUB_ENV"
+          fi
 
       - name: Run vagrant up (Debian + Ubuntu)
-        run: vagrant up noble debian13
+        run: vagrant up ubuntu debian13
         # Initializes and provisions the Vagrant environment as defined in Vagrantfile
 
       - name: Collect virtualization diagnostics on failure

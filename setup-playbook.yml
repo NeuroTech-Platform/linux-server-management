@@ -8,7 +8,7 @@
 # 3. Configuring system security policies and access controls
 #
 # Requirements:
-#   - Target systems: Ubuntu 24.04+, Debian 13+
+#   - Target systems: Ubuntu 26.04+, Debian 13+
 #   - Ansible 2.9+
 #   - Internet connectivity (for downloading hardening role)
 #   - SSH key access to target hosts

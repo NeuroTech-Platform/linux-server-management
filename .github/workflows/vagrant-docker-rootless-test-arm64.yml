@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        box: [noble, debian13]
+        box: [ubuntu, debian13]
     env:
       TEST_PLAYBOOK: testing/e2e-hardened-then-install-docker-rootless.yml
 
