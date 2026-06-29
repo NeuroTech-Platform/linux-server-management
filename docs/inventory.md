@@ -33,11 +33,23 @@ inventories/
 │   ├── inventory
 │   ├── group_vars/
 │   └── host_vars/
-└── testing/
+├── testing/
+│   ├── inventory
+│   ├── group_vars/
+│   └── host_vars/
+└── testmachine/                    # Minimal single-host example (gitignored, local)
     ├── inventory
-    ├── group_vars/
     └── host_vars/
+        └── testmachine-node/vars.yml
 ```
+
+> **Note:** the contents of `inventories/<env>/` are gitignored by design (they
+> hold IPs, usernames and secrets), so none of these directories are committed —
+> a fresh clone contains only this guide and the inline examples below. Create
+> your own environment directory locally or in a private repo. `testmachine/` above
+> is shown as the shape of a minimal, single-host example: one `inventory` file
+> and a single `host_vars/<host>/vars.yml` defining every variable
+> `setup-playbook.yml` requires.
 
 ## Inventory Organization
 
