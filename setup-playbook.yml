@@ -80,6 +80,37 @@
           - "Number of users to create: {{ SSH_USERLIST | length }}"
       tags: [info, always]
 
+    # Debian cloud images ship apt sources using the "mirror+file" method
+    # (URIs: mirror+file:///etc/apt/mirrors/*.list). That method is killed by the
+    # APT seccomp sandbox this playbook enables (APT::Sandbox::Seccomp "1"), so apt
+    # update dies with "Method file has died unexpectedly". Point apt at the real
+    # mirrors instead, which works fine under the sandbox.
+    - name: Use direct Debian mirrors instead of the cloud mirror+file method
+      become: true
+      when: ansible_facts.os_family == "Debian"
+      tags: [apt, sources]
+      block:
+        - name: Find apt sources using the mirror+file method
+          ansible.builtin.find:
+            paths:
+              - /etc/apt/sources.list.d
+            patterns:
+              - "*.sources"
+              - "*.list"
+            contains: 'mirror\+file:///etc/apt/mirrors/'
+            read_whole_file: true
+          register: apt_mirror_sources
+
+        - name: Point apt at deb.debian.org directly
+          ansible.builtin.replace:
+            path: "{{ item.path }}"
+            regexp: 'mirror\+file:///etc/apt/mirrors/([\w-]+)\.list'
+            replace: 'https://deb.debian.org/\1'
+          loop: "{{ apt_mirror_sources.files }}"
+          loop_control:
+            label: "{{ item.path }}"
+          when: apt_mirror_sources.matched | int > 0
+
   tasks:
     # ===================================================================
     # USER MANAGEMENT SECTION
