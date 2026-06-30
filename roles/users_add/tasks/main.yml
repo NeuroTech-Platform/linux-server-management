@@ -245,10 +245,6 @@
 
       write_output "ℹ️  Last boot: $LAST_BOOT\n"
 
-      # Check system uptime
-      UPTIME=$(uptime | awk -F'up ' '{print $2}' | awk -F', load' '{print $1}')
-      write_output "ℹ️  Uptime: $UPTIME\n"
-
       write_output "==============================\n"
       write_output "\n"
 
@@ -397,61 +393,37 @@
       secret="$base/$user"
 
       # Already enrolled?
-      if [ -s "$secret" ]; then
-        exit 0
-      fi
+      [ -s "$secret" ] && exit 0
 
       umask 077
       mkdir -p "$base"
       chmod 0700 "$base"
 
-      echo "==============================================================================="
-      echo "SECURITY REQUIREMENT: Two-Factor Authentication (2FA) Setup"
-      echo "==============================================================================="
-      echo "You must set up TOTP-based 2FA (Aegis, Google Authenticator, Authy, Bitwarden, etc.)"
-      echo "Please scan the QR code below with your authenticator app."
-      echo "Save the emergency scratch codes in a secure location."
-      echo ""
+      # Create the TOTP secret non-interactively. -1 skips the confirm prompt (no TTY
+      # here), -Q none suppresses the QR. Options: -t time-based, -d no reuse,
+      # -f force, -r 3/-R 30 rate limit, -w 3 skew window, -e 5 emergency codes.
+      echo "-1" | google-authenticator -t -d -f -r 3 -R 30 -w 3 -e 5 -Q none -s "$secret" >/dev/null 2>&1 || true
 
-      # Run enrollment with all options pre-configured
-      # -t: time-based TOTP
-      # -d: disallow token reuse (security)
-      # -f: force write without confirmation
-      # -r 3: rate limit to 3 attempts
-      # -R 30: rate limit window of 30 seconds
-      # -w 3: window of 3 codes (compensates for time skew)
-      # -s: secret file location
-      # -e 5: generate 5 emergency codes
-      # -Q none: suppress google-authenticator QR (we generate our own because it would not display)
-      # Pipe -1 to skip the code verification prompt (no TTY available in pam_exec)
-      echo "-1" | google-authenticator -t -d -f -r 3 -R 30 -w 3 -e 5 -Q none -s "$secret"
-
-      # Must exist and be non-empty, otherwise deny login
       if [ ! -s "$secret" ]; then
-        echo ""
-        echo "2FA enrollment failed or was canceled. Login denied."
+        echo "2FA enrollment failed. Login denied."
         exit 1
       fi
-
       chmod 0600 "$secret"
 
-      # Extract secret key and generate QR code ourselves using qrencode
       secret_key=$(head -1 "$secret")
-      hostname=$(hostname)
-      otpauth_url="otpauth://totp/${user}@${hostname}?secret=${secret_key}&issuer=${hostname}"
+      host=$(hostname)
+      scratch=$(grep -E '^[0-9]{8}$' "$secret" | tr '\n' ' ')
 
-      echo ""
-      echo "Scan this QR code with your authenticator app:"
-      echo ""
-      echo "$otpauth_url" | qrencode -t ANSIUTF8
-      echo ""
-      echo "Or manually enter this secret key: $secret_key"
-      echo ""
-      echo "Your emergency scratch codes (save these securely):"
-      grep -E '^[0-9]{8}$' "$secret" | sed 's/^/  /'
-      echo ""
-      echo "2FA setup successful! Please use your TOTP app for future logins."
-      echo "==============================================================================="
+      # IMPORTANT: pam_exec emits ONE PAM message per output line, and SSH's
+      # keyboard-interactive conversation caps that at 32 (PAM_MAX_NUM_MSG); going
+      # over aborts the login with "sshpam_query: too many query messages". A compact
+      # QR (margin 1) plus the 3 text lines below stays well under that limit. If you
+      # extend this, keep TOTAL output lines under ~30.
+      echo "=== 2FA setup: ${user}@${host} -- scan the QR, then enter the 6-digit code ==="
+      printf 'otpauth://totp/%s@%s?secret=%s&issuer=%s' "$user" "$host" "$secret_key" "$host" \
+        | qrencode -t ANSIUTF8 -m 1
+      echo "Manual key: ${secret_key}"
+      echo "Backup codes: ${scratch}"
 
       exit 0
   when: enable_2fa | default(false)
