@@ -3,6 +3,8 @@
     name: "{{ item.username }}"
     state: present
   loop: "{{ users_add_userlist | default([]) }}"
+  loop_control:
+    label: "{{ item.username }}"  # avoid printing the full record (contains initialpassword)
 
 - name: Create user accounts and force password change on first login
   ansible.builtin.user:
@@ -26,6 +28,8 @@
     state: present
     comment: "{{ item.username }} key"
   loop: "{{ users_add_userlist | default([]) }}"
+  loop_control:
+    label: "{{ item.username }}"  # avoid printing the full record (contains initialpassword)
 
 - name: Add all users who should be admin to sudo
   ansible.builtin.lineinfile:
@@ -36,6 +40,8 @@
     create: true
     validate: '/usr/sbin/visudo -cf %s'
   loop: "{{ users_add_userlist | default([]) }}"
+  loop_control:
+    label: "{{ item.username }}"  # avoid printing the full record (contains initialpassword)
   when: item.admin
 
 - name: Allow non-admin users to run system updates/upgrades
@@ -64,6 +70,8 @@
     mode: '0440'
     validate: '/usr/sbin/visudo -cf %s'
   loop: "{{ users_add_userlist | default([]) }}"
+  loop_control:
+    label: "{{ item.username }}"  # avoid printing the full record (contains initialpassword)
   when:
     - not item.admin
     - item.non_admin_allowed_commands is defined
@@ -92,6 +100,8 @@
     owner: root
     group: root
   loop: "{{ users_add_userlist | default([]) }}"
+  loop_control:
+    label: "{{ item.username }}"  # avoid printing the full record (contains initialpassword)
   when:
     - not item.admin
     - item.non_admin_allowed_commands is defined
@@ -352,6 +362,8 @@
     groups: no2fa
     append: true
   loop: "{{ users_add_userlist | default([]) }}"
+  loop_control:
+    label: "{{ item.username }}"  # avoid printing the full record (contains initialpassword)
   when:
     - enable_2fa | default(false)
     - item.enable_2fa is defined

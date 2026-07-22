@@ -111,6 +111,14 @@
             label: "{{ item.path }}"
           when: apt_mirror_sources.matched | int > 0
 
+        - name: Refresh apt cache with the corrected sources
+          ansible.builtin.apt:
+            update_cache: true
+          register: apt_cache_refresh
+          retries: 3
+          delay: 5
+          until: apt_cache_refresh is succeeded
+
   tasks:
     # ===================================================================
     # USER MANAGEMENT SECTION
