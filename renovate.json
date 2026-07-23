@@ -10,6 +10,14 @@
   ],
   "minimumReleaseAge": "7 days",
   "osvVulnerabilityAlerts": true,
+  "prBodyColumns": [
+    "Package",
+    "Change",
+    "Age",
+    "Adoption",
+    "Passing",
+    "Confidence"
+  ],
   "ansible-galaxy": {
     "managerFilePatterns": [
       "/(^|/)requirements\\.ya?ml$/",
