@@ -17,6 +17,7 @@
       # Initial password required for sudo - must be changed on first login
     update_password: on_create  # This ensures the password is only set when the user is created
   loop: "{{ users_add_userlist | default([]) }}"
+  register: users_add_created  # Per-user result; handler uses .changed to chage only new accounts
   notify:
     - Force password change on first login
   no_log: true  # Prevent password hashes from being logged
