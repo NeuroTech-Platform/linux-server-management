@@ -1,7 +1,13 @@
 # Suppress ansible-lint var-naming warning for third-party role variables
 # noqa: var-naming[no-role-prefix]
+# Only force a password change on accounts that were just created. update_password:
+# on_create means existing users' password hashes are never rewritten, so we must not
+# reset their password-aging either (that would prompt them to change their password at
+# next login). Filtering on .changed restricts chage -d 0 to newly-created accounts.
 - name: Force password change on first login
-  ansible.builtin.command: "chage -d 0 {{ item.username }}"
-  loop: "{{ users_add_userlist | default([]) }}"
+  ansible.builtin.command: "chage -d 0 {{ item.name }}"
+  loop: "{{ users_add_created.results | default([]) | selectattr('changed') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
   register: chage_output  # This will register the output of the command to a variable
   changed_when: "'Password aging updated' in chage_output.stdout"
