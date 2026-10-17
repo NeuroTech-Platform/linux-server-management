@@ -168,6 +168,18 @@ mount | grep proc
 sudo -u dockeruser journalctl --user -u docker -n 50
 ```
 
+### `user@<uid>.service` fails with `status=224/PAM` after a reboot
+
+Rootless dockerd is a user service and needs the Docker user's systemd user manager. The hardening role sets `PASS_MAX_DAYS 60` and `INACTIVE 30` in `login.defs`, so a Docker user created before this fix "expires" after 60 days even with a locked password. `pam_unix` answers `new_authtok_reqd`, systemd cannot change a password for a service, and the user manager exits 224.
+
+```bash
+sudo chage -l dockeruser                       # "Password expires" in the past?
+sudo chage -m 0 -M -1 -I -1 -E -1 dockeruser   # disable aging for the service account
+sudo systemctl restart user@"$(id -u dockeruser)".service
+```
+
+`install-docker-rootless.yml` now sets this on the user; re-running it is the permanent fix.
+
 ### Containers Can't Access Network
 
 ```bash

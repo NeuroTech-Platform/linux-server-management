@@ -75,11 +75,17 @@
       become: true
       tags: [docker-setup, sysctl]
 
+    # No password aging on the service account: hardening sets PASS_MAX_DAYS 60 / INACTIVE 30,
+    # the locked password "expires", user@<uid>.service fails with status=224/PAM and rootless
+    # dockerd never starts again. -1 disables max days, inactivity and account expiry.
     - name: Ensure Docker user exists before enabling lingering
       ansible.builtin.user:
         name: "{{ DOCKER_USER | default('dockeruser') }}"
         state: present
         create_home: true
+        password_expire_max: -1
+        password_expire_account_disable: -1
+        expires: -1
       become: true
       tags: [docker-setup, user-config]
 
