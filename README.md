@@ -325,6 +325,9 @@ ansible-playbook -i inventory playbook.yml --ask-vault-pass
 - The target host is missing one of the mandatory variables. Define all of them
   (see Quick Start step 2); `ENABLE_2FA` is required even when set to `false`.
 
+**`ModuleNotFoundError: No module named 'ansible'` from `.venv/bin/ansible-playbook`**
+- The venv was built by a Python version that is gone (OS upgrade, or a different shell environment such as a toolbox). Rebuild it from the shell you run Ansible in: `rm -rf .venv && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`.
+
 **`externally-managed-environment` when running `pip install`**
 - You're installing into the system Python (PEP 668). Use the virtual environment
   from the Installation section: `python3 -m venv .venv && source .venv/bin/activate`.

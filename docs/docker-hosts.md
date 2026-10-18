@@ -72,6 +72,10 @@ AUTO_UPDATES_OPTIONS:
 # === SECURITY HARDENING ===
 DISABLE_WIRELESS: true
 DISABLE_ROOT_ACCOUNT: true
+# Kernel audit backlog. Container start-up floods auditd; with the role default (8192) the
+# console shows "kauditd hold queue overflow" and records are dropped. Kernel command line:
+# applied by the next setup-playbook.yml run plus a reboot.
+grub_audit_backlog_cmdline: "audit_backlog_limit=65536"
 
 # === DOCKER CONFIGURATION ====================================
 DOCKER_USER: "dockeruser"
@@ -179,6 +183,14 @@ sudo systemctl restart user@"$(id -u dockeruser)".service
 ```
 
 `install-docker-rootless.yml` now sets this on the user; re-running it is the permanent fix.
+
+### Console floods with `kauditd hold queue overflow`
+
+The hardening role caps the kernel audit backlog at 8192 (`audit_backlog_limit` on the kernel command line). Many containers starting at once exceed it; records are dropped, nothing else breaks. Set `grub_audit_backlog_cmdline: "audit_backlog_limit=65536"` in the host vars (example above), re-run `setup-playbook.yml`, reboot.
+
+### Containers die with `fork: Resource temporarily unavailable` or `error setting rlimit`
+
+The hardening role caps `nproc` at 1024 and `NOFILE` at 1024 for every user, including the Docker user and its user manager. Workloads with many threads (browsers, Erlang, databases) need more: raise them for the Docker user only, with a `/etc/security/limits.d/` entry, a `LimitNOFILE=` drop-in for `user@.service`, and `LimitNPROC=`/`LimitNOFILE=`/`TasksMax=` drop-ins for the user's `docker.service`. The LibreChat stack ships ready-made files for this in its `deploy/` directory.
 
 ### Containers Can't Access Network
 
